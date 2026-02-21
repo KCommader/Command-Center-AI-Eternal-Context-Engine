@@ -1,0 +1,30 @@
+# LanceDB — rebuilt from vault, never commit
+.lancedb/
+
+# Personal vault data — keep private
+my-vault/
+*.private.md
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+
+# Environment / secrets
+.env
+.env.*
+*.key
+*.pem
+*.secret
+
+# Obsidian workspace state (machine-specific)
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+
+# OS
+.DS_Store
+Thumbs.db
