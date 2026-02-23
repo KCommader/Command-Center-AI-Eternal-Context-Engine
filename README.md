@@ -45,8 +45,76 @@ python engine/engine.py --vault ./vault --watch
 python engine/engine.py --vault ./vault --search "what is my trading strategy"
 
 # 4. Query via API (from any local AI or script)
-curl "http://localhost:8765/search?q=risk+management&k=5"
+curl -X POST "http://127.0.0.1:8765/search" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"risk management","k":5}'
 ```
+
+---
+
+
+## App Mode (Thin Launcher)
+
+If you want this to feel like an app instead of manually managing processes:
+
+```bash
+# Health check your local setup
+python engine/omniscience.py doctor
+
+# Start in background (app mode)
+python engine/omniscience.py start --vault ./vault
+
+# Check status
+python engine/omniscience.py status
+
+# Show recent logs
+python engine/omniscience.py logs --lines 80
+
+# Stop
+python engine/omniscience.py stop
+```
+
+This wrapper does **not** replace your engine logic.
+It simply manages process lifecycle (start/stop/status/logs).
+
+---
+
+
+## API Auth (Optional, Recommended)
+
+Default mode is local-open if no API keys are set.
+
+Single-key mode (simplest):
+
+```bash
+export OMNI_API_KEY="replace-with-long-random-token"
+```
+
+Optional advanced split roles:
+
+```bash
+export OMNI_API_KEYS_READ="read_token"
+export OMNI_API_KEYS_WRITE="write_token"
+export OMNI_API_KEYS_ADMIN="admin_token"
+```
+
+Use bearer token in requests:
+
+```bash
+curl -X POST "http://127.0.0.1:8765/search" \
+  -H "Authorization: Bearer $OMNI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"latest trading decisions","k":5,"namespaces":["company_memory"]}'
+```
+
+---
+
+## Why These Choices
+
+- **JSON body for `/search` and `/capture`**: better input validation, cleaner contracts for AIs/scripts, and avoids putting sensitive content in URL query strings.
+- **Why URL query strings are risky**: query params can leak into browser history, access logs, reverse-proxy logs, and monitoring tools.
+- **Bearer token auth**: simple, standard, and enough for local/LAN setups. Start with one key (`OMNI_API_KEY`), then split read/write/admin keys only if needed.
+- **Namespace filters**: keep big knowledge sets (e.g., trading books) from polluting runtime bot memory retrieval.
 
 ---
 
@@ -55,8 +123,9 @@ curl "http://localhost:8765/search?q=risk+management&k=5"
 | Endpoint | Method | Description |
 |---|---|---|
 | `/health` | GET | Engine status + vault stats |
-| `/search?q=<query>&k=<n>` | GET | Semantic search, returns top-k chunks |
-| `/capture?text=<text>&tag=<tag>` | POST | Store a memory directly |
+| `/search` | POST (JSON) | Semantic search with optional filters |
+| `/capture` | POST (JSON) | Store a memory entry with metadata |
+| `/admin/reindex` | POST | Trigger background reindex (admin key) |
 
 ---
 
