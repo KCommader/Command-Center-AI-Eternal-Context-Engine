@@ -42,7 +42,7 @@ pip install -r engine/requirements.txt
 python engine/engine.py --vault ./vault --watch
 
 # 3. Search your context from any terminal
-python engine/engine.py --vault ./vault --search "what is my trading strategy"
+python engine/engine.py --vault ./vault --search "what is my content strategy"
 
 # 4. Query via API (from any local AI or script)
 curl -X POST "http://127.0.0.1:8765/search" \
@@ -104,7 +104,7 @@ Use bearer token in requests:
 curl -X POST "http://127.0.0.1:8765/search" \
   -H "Authorization: Bearer $OMNI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"query":"latest trading decisions","k":5,"namespaces":["company_memory"]}'
+  -d '{"query":"latest project decisions","k":5,"namespaces":["company_memory"]}'
 ```
 
 ---
@@ -114,7 +114,7 @@ curl -X POST "http://127.0.0.1:8765/search" \
 - **JSON body for `/search` and `/capture`**: better input validation, cleaner contracts for AIs/scripts, and avoids putting sensitive content in URL query strings.
 - **Why URL query strings are risky**: query params can leak into browser history, access logs, reverse-proxy logs, and monitoring tools.
 - **Bearer token auth**: simple, standard, and enough for local/LAN setups. Start with one key (`OMNI_API_KEY`), then split read/write/admin keys only if needed.
-- **Namespace filters**: keep big knowledge sets (e.g., trading books) from polluting runtime bot memory retrieval.
+- **Namespace filters**: keep big knowledge sets (e.g., cooking books) from polluting runtime project-memory retrieval.
 
 ---
 
