@@ -17,6 +17,7 @@ API Endpoints (default http://127.0.0.1:8765):
   POST /search
   POST /capture
   POST /admin/reindex
+  POST /admin/cleanup
 
 Auth:
   - Default single key (full access): OMNI_API_KEY
@@ -30,10 +31,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import re
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -59,6 +62,13 @@ CHUNK_OVERLAP = 80
 API_PORT = 8765
 API_HOST = "127.0.0.1"
 IGNORED_DIRS = {".lancedb", ".obsidian", ".git", "__pycache__", "venv", ".venv", "node_modules"}
+RUNTIME_DIR_NAME = ".omniscience"
+INDEX_MANIFEST_FILE = "index_manifest.json"
+QUERY_CACHE_TTL_SEC = int(os.getenv("OMNI_QUERY_CACHE_TTL_SEC", "3600"))
+QUERY_CACHE_MAX_ITEMS = int(os.getenv("OMNI_QUERY_CACHE_MAX_ITEMS", "256"))
+TMP_FILE_TTL_SEC = int(os.getenv("OMNI_TMP_TTL_SEC", str(48 * 3600)))
+TMP_MAX_FILES = int(os.getenv("OMNI_TMP_MAX_FILES", "400"))
+LOG_MAX_BYTES = int(os.getenv("OMNI_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
 
 ROLE_RANK = {"read": 1, "write": 2, "admin": 3}
 
@@ -180,7 +190,19 @@ class OmniscienceEngine:
     def __init__(self, vault_path: str):
         self.vault = Path(vault_path).resolve()
         self.db_path = str(self.vault.parent / DB_DIR)
+        self.runtime_dir = self.vault.parent / RUNTIME_DIR_NAME
+        self.tmp_dir = self.runtime_dir / "tmp"
+        self.log_file = self.runtime_dir / "engine.log"
+        self.manifest_file = self.runtime_dir / INDEX_MANIFEST_FILE
         self.indexed_at: datetime | None = None
+        self._query_cache: OrderedDict[str, tuple[float, list[dict[str, Any]]]] = OrderedDict()
+        self._manifest: dict[str, dict[str, Any]] = {}
+        self._cleanup_counter = 0
+
+        self.runtime_dir.mkdir(parents=True, exist_ok=True)
+        self.tmp_dir.mkdir(parents=True, exist_ok=True)
+        self._manifest = self._load_manifest()
+        self._cleanup_runtime_files()
 
         print("\n🧠 Omniscience Engine")
         print(f"   Vault : {self.vault}")
@@ -193,6 +215,125 @@ class OmniscienceEngine:
 
         self.db = lancedb.connect(self.db_path)
         self.table = self._ensure_table()
+
+    def _load_manifest(self) -> dict[str, dict[str, Any]]:
+        if not self.manifest_file.exists():
+            return {}
+        try:
+            data = json.loads(self.manifest_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+        return {}
+
+    def _save_manifest(self) -> None:
+        tmp = self.manifest_file.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self._manifest, indent=2), encoding="utf-8")
+        tmp.replace(self.manifest_file)
+
+    def _prune_manifest(self) -> None:
+        keep: dict[str, dict[str, Any]] = {}
+        for rel, meta in self._manifest.items():
+            if (self.vault / rel).exists():
+                keep[rel] = meta
+        self._manifest = keep
+
+    def _content_hash(self, content: str) -> str:
+        return hashlib.sha256(content.encode("utf-8", errors="ignore")).hexdigest()
+
+    def _normalize_filters(
+        self,
+        namespaces: list[str] | None,
+        tags: list[str] | None,
+        path_prefix: str | None,
+    ) -> tuple[tuple[str, ...], tuple[str, ...], str]:
+        ns = tuple(sorted(slug(x) for x in namespaces)) if namespaces else ()
+        tg = tuple(sorted(slug(x) for x in tags)) if tags else ()
+        pp = (path_prefix or "").strip().lower()
+        return ns, tg, pp
+
+    def _query_cache_key(
+        self,
+        query: str,
+        top_k: int,
+        namespaces: list[str] | None,
+        tags: list[str] | None,
+        path_prefix: str | None,
+    ) -> str:
+        ns, tg, pp = self._normalize_filters(namespaces, tags, path_prefix)
+        payload = json.dumps(
+            {"q": query.strip(), "k": top_k, "ns": ns, "tags": tg, "pp": pp},
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def _query_cache_get(self, key: str) -> list[dict[str, Any]] | None:
+        now = time.time()
+        hit = self._query_cache.get(key)
+        if hit is None:
+            return None
+        ts, rows = hit
+        if (now - ts) > QUERY_CACHE_TTL_SEC:
+            self._query_cache.pop(key, None)
+            return None
+        self._query_cache.move_to_end(key)
+        return rows
+
+    def _query_cache_set(self, key: str, rows: list[dict[str, Any]]) -> None:
+        self._query_cache[key] = (time.time(), rows)
+        self._query_cache.move_to_end(key)
+        while len(self._query_cache) > QUERY_CACHE_MAX_ITEMS:
+            self._query_cache.popitem(last=False)
+
+    def _invalidate_query_cache(self) -> None:
+        self._query_cache.clear()
+
+    def _trim_log_file(self) -> None:
+        if not self.log_file.exists():
+            return
+        try:
+            size = self.log_file.stat().st_size
+            if size <= LOG_MAX_BYTES:
+                return
+            with self.log_file.open("rb") as fh:
+                fh.seek(0, os.SEEK_END)
+                end = fh.tell()
+                start = max(0, end - LOG_MAX_BYTES)
+                fh.seek(start, os.SEEK_SET)
+                tail = fh.read()
+            with self.log_file.open("wb") as fh:
+                fh.write(tail)
+        except Exception:
+            pass
+
+    def _cleanup_runtime_files(self) -> None:
+        now = time.time()
+        files: list[Path] = []
+        for p in self.tmp_dir.rglob("*"):
+            if p.is_file():
+                files.append(p)
+
+        # Age-based cleanup.
+        for p in files:
+            try:
+                if (now - p.stat().st_mtime) > TMP_FILE_TTL_SEC:
+                    p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+        # Count-based cleanup.
+        files = [p for p in self.tmp_dir.rglob("*") if p.is_file()]
+        if len(files) > TMP_MAX_FILES:
+            files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            for stale in files[TMP_MAX_FILES:]:
+                try:
+                    stale.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        self._trim_log_file()
 
     def _ensure_table(self):
         names = set(self.db.table_names())
@@ -213,11 +354,36 @@ class OmniscienceEngine:
     def embed(self, texts: list[str]) -> list[list[float]]:
         return self.model.encode(texts, show_progress_bar=False).tolist()
 
-    def index_file(self, file_path: Path, quiet: bool = False) -> int:
+    def index_file(
+        self,
+        file_path: Path,
+        quiet: bool = False,
+        force: bool = False,
+        persist_manifest: bool = True,
+        invalidate_cache: bool = True,
+    ) -> int:
         rel = str(file_path.relative_to(self.vault))
         content = file_path.read_text(encoding="utf-8", errors="ignore")
+        content_hash = self._content_hash(content)
+
+        existing = self._manifest.get(rel)
+        if (not force) and existing and existing.get("content_hash") == content_hash:
+            if not quiet:
+                print(f"  ⏭️  {rel} unchanged (cache hit)")
+            return int(existing.get("chunks", 0) or 0)
+
         chunks = chunk_text(content)
         if not chunks:
+            safe_rel = rel.replace("'", "''")
+            try:
+                self.table.delete(f"path = '{safe_rel}'")
+            except Exception:
+                pass
+            self._manifest.pop(rel, None)
+            if persist_manifest:
+                self._save_manifest()
+            if invalidate_cache:
+                self._invalidate_query_cache()
             return 0
 
         vectors = self.embed(chunks)
@@ -251,18 +417,37 @@ class OmniscienceEngine:
         ]
 
         self.table.add(rows)
+        self._manifest[rel] = {
+            "content_hash": content_hash,
+            "chunks": len(chunks),
+            "namespace": namespace,
+            "indexed_at": now,
+        }
+        if persist_manifest:
+            self._save_manifest()
+        if invalidate_cache:
+            self._invalidate_query_cache()
         if not quiet:
             print(f"  📄 {rel} → {len(chunks)} chunks [{namespace}]")
         return len(chunks)
 
-    def index_all(self):
+    def index_all(self, force: bool = False):
         files = vault_md_files(self.vault)
         total = 0
         print(f"🔍 Indexing {len(files)} files...\n")
+        self._prune_manifest()
         for file_path in files:
-            total += self.index_file(file_path)
+            total += self.index_file(
+                file_path,
+                force=force,
+                persist_manifest=False,
+                invalidate_cache=False,
+            )
 
         self.indexed_at = datetime.utcnow()
+        self._save_manifest()
+        self._invalidate_query_cache()
+        self._cleanup_runtime_files()
         print(f"\n✅ Done. {len(files)} files → {total} chunks in LanceDB.\n")
         self._update_dashboard(len(files), total)
 
@@ -296,6 +481,11 @@ class OmniscienceEngine:
         tags: list[str] | None = None,
         path_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
+        qkey = self._query_cache_key(query, top_k, namespaces, tags, path_prefix)
+        cached = self._query_cache_get(qkey)
+        if cached is not None:
+            return cached
+
         vec = self.embed([query])[0]
         fetch_k = max(top_k, top_k * 4)
 
@@ -310,7 +500,13 @@ class OmniscienceEngine:
         tag_set = {slug(x) for x in tags} if tags else None
 
         filtered = [r for r in rows if self._row_matches_filters(r, ns_set, tag_set, path_prefix)]
-        return filtered[:top_k]
+        result = filtered[:top_k]
+        self._query_cache_set(qkey, result)
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= 50:
+            self._cleanup_counter = 0
+            self._cleanup_runtime_files()
+        return result
 
     def capture(self, req: CaptureRequest) -> dict[str, Any]:
         archive_dir = self.vault / "Archive"
@@ -335,6 +531,7 @@ class OmniscienceEngine:
             f.write(entry)
 
         self.index_file(target, quiet=True)
+        self._invalidate_query_cache()
 
         return {
             "status": "captured",
@@ -358,6 +555,11 @@ class OmniscienceEngine:
             "lancedb_rows": rows,
             "last_indexed": self.indexed_at.isoformat() if self.indexed_at else "never",
             "auth_enabled": bool(token_roles),
+            "query_cache_items": len(self._query_cache),
+            "query_cache_ttl_sec": QUERY_CACHE_TTL_SEC,
+            "query_cache_max_items": QUERY_CACHE_MAX_ITEMS,
+            "tmp_ttl_sec": TMP_FILE_TTL_SEC,
+            "tmp_max_files": TMP_MAX_FILES,
         }
 
     def _update_dashboard(self, file_count: int, chunk_count: int):
@@ -420,7 +622,7 @@ class VaultWatcher(FileSystemEventHandler):
 
 # ─── FastAPI Server ───────────────────────────────────────────────────────────
 def create_app(engine: OmniscienceEngine) -> FastAPI:
-    app = FastAPI(title="Omniscience Engine", version="1.1.0")
+    app = FastAPI(title="Omniscience Engine", version="1.2.0")
 
     auth_cfg = load_auth_config()
     token_roles = build_token_roles(auth_cfg)
@@ -479,11 +681,17 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         require_role("admin", authorization)
 
         def _run():
-            engine.index_all()
+            engine.index_all(force=True)
 
         t = threading.Thread(target=_run, daemon=True)
         t.start()
         return JSONResponse({"status": "started", "action": "reindex"})
+
+    @app.post("/admin/cleanup")
+    def admin_cleanup(authorization: str | None = Header(default=None, alias="Authorization")):
+        require_role("admin", authorization)
+        engine._cleanup_runtime_files()
+        return JSONResponse({"status": "ok", "action": "cleanup"})
 
     return app
 
@@ -515,8 +723,10 @@ def main():
             print(f"     {result['text'][:200]}\n")
         return
 
-    if args.reindex or engine.table.count_rows() == 0:
-        engine.index_all()
+    if args.reindex:
+        engine.index_all(force=True)
+    elif engine.table.count_rows() == 0:
+        engine.index_all(force=True)
 
     if args.watch:
         watcher = VaultWatcher(engine)
