@@ -95,16 +95,65 @@ def try_admin_cleanup(state: dict | None) -> bool:
         return False
 
 
+def purge_cache_tier(vault: Path) -> int:
+    """Delete all files from vault/Cache/ — session memory, not worth keeping."""
+    cache_dir = vault / "Cache"
+    if not cache_dir.exists():
+        _log("cache_purge: Cache/ directory not found, skipping")
+        return 0
+    removed = 0
+    for f in cache_dir.glob("*.md"):
+        try:
+            f.unlink()
+            _log(f"cache_purge: removed {f.name}")
+            removed += 1
+        except Exception as exc:
+            _log(f"cache_purge: failed to remove {f.name}: {exc}")
+    _log(f"cache_purge: done removed={removed}")
+    return removed
+
+
+def expire_short_term(vault: Path, ttl_days: int = 30) -> int:
+    """Remove short-term memory files older than ttl_days."""
+    short_dir = vault / "Archive" / "short"
+    if not short_dir.exists():
+        return 0
+    cutoff = time.time() - (ttl_days * 86400)
+    removed = 0
+    for f in short_dir.glob("*.md"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+                _log(f"short_term_expire: removed {f.name} (>{ttl_days}d old)")
+                removed += 1
+        except Exception as exc:
+            _log(f"short_term_expire: failed {f.name}: {exc}")
+    _log(f"short_term_expire: done removed={removed}")
+    return removed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Nightly maintenance")
     parser.add_argument("--python", default=sys.executable, help="Python executable")
     parser.add_argument("--vault", default=str(ROOT / "vault"), help="Vault path")
+    parser.add_argument("--short-term-ttl", type=int, default=30, help="Days before short-term memory expires")
     args = parser.parse_args()
 
     vault = Path(args.vault).resolve()
     _log("nightly: start")
+
+    # 1. Engine health check
     doctor_rc = run_doctor(args.python, vault)
+
+    # 2. Engine admin cleanup (cache, temp files)
     cleanup_ok = try_admin_cleanup(_read_state())
+
+    # 3. Purge vault/Cache/ (session-level noise)
+    purge_cache_tier(vault)
+
+    # 4. Expire old short-term memory files
+    expire_short_term(vault, ttl_days=args.short_term_ttl)
+
     _log(f"nightly: done doctor_rc={doctor_rc} cleanup_ok={cleanup_ok}")
     return 0 if doctor_rc == 0 else 1
 
