@@ -1,0 +1,41 @@
+# USER.md — Who You Are
+
+> Copy this file to USER.md and fill it in. This file is gitignored — it never leaves your machine.
+
+## Identity
+
+- **Name**: Your Name
+- **Role**: What you do (e.g. founder, engineer, researcher)
+- **Timezone**: Your timezone (e.g. EST / New York)
+- **Languages**: Languages you work in (e.g. English, Spanish)
+
+## Machines
+
+- **Primary**: Machine name + OS (e.g. Desktop — Ubuntu 24.04)
+- **Secondary**: Machine name + OS (e.g. Laptop — macOS 14)
+
+## Tech Stack
+
+- **Primary language**: e.g. Python
+- **Frameworks**: e.g. FastAPI, React, Flutter
+- **AI tools**: e.g. Claude Code, Claude Desktop, Cursor
+- **Infrastructure**: e.g. Linux, Docker, NAS
+
+## Working Style
+
+- How you prefer to communicate with AI (e.g. direct, no fluff)
+- How you prefer code to be written (e.g. minimal comments, typed Python)
+- Any other preferences the AI should know
+
+## Active Projects
+
+- **Project 1**: Brief description
+- **Project 2**: Brief description
+
+## Core Directives
+
+Rules the AI must always follow when working with you:
+
+1. Never delete files without confirmation
+2. Always explain what you're about to do before doing it
+3. Add your own rules here
