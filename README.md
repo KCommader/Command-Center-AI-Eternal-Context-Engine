@@ -1,184 +1,139 @@
-# 🧠 Omniscience Engine
-### Eternal Context for AI — Local, Private, Visual
+# 🧠 Command Center AI
+### Eternal Memory for Any AI — Local, Private, Portable
 
-A lightweight backend that gives any local AI assistant **eternal memory** by combining:
-- 📁 **Obsidian Vault** — human-readable Markdown files you can visually browse
-- ⚡ **LanceDB** — on-disk vector database for millisecond semantic search
-- 🌐 **FastAPI** — a local REST API any AI/script on your network can query
+Your AI shouldn't start from scratch every session. Command Center gives any AI tool permanent, searchable memory stored as Markdown files you can read, edit, and browse in Obsidian.
 
-> No cloud. No subscriptions. No lock-in. Your context lives on your machine.
+**Works with**: Claude Desktop, Claude Code, Cursor, Zed, Gemini CLI, Custom AI, or any MCP-compatible AI.
+
+> No cloud. No subscriptions. No lock-in. Your context lives on your machine — or on a USB drive.
 
 ---
 
-## How It Works
+## What It Does
 
 ```
-[AI Input / Custom AI]
-        ↓  captures context
-[vault/ Markdown Files]  ←→  Browse in Obsidian (Graph View, DB plugin)
-        ↓  watched by engine
-[engine/engine.py]
-        ↓  embeds + indexes
-[.lancedb/ Vector DB]
-        ↓  responds to queries
-[Any AI on your machine/network]
+Your Notes (Markdown)  →  Vault (Obsidian Graph View)
+         ↓
+    Engine indexes with LanceDB (local vector DB)
+         ↓
+  MCP Server / REST API  →  Any AI on your machine or network
+         ↓
+  AI remembers you. Every session. Across machines.
 ```
 
-1. Your AI writes context to `vault/Archive/` (auto-capture or manual)
-2. The Engine watches for changes and immediately indexes them into LanceDB
-3. Any AI sends JSON to `http://127.0.0.1:8765/search`
-4. The Engine returns semantically relevant context from your vault
-5. You can see your knowledge "brain" growing live in Obsidian's Graph View
+- **Write notes in Markdown** → Engine indexes them automatically
+- **AI searches your vault** via MCP or REST API — gets relevant context instantly
+- **Visualize your knowledge** in Obsidian's Graph View as it grows
+- **Migrate in 60 seconds** — copy folder, reinstall deps, reindex
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies
+# 1. Clone
+git clone https://github.com/KCommader/Command-Center-AI-Eternal-Context-Engine
+cd Command-Center-AI
+
+# 2. Install
 pip install -r engine/requirements.txt
 
-# 2. Start the engine (indexes vault + serves API + watches for changes)
+# 3. Fill in your identity (copy templates, then edit them)
+cp vault/Core/USER.md.example vault/Core/USER.md
+cp vault/Core/SOUL.md.example vault/Core/SOUL.md
+cp vault/Core/COMPANY-SOUL.md.example vault/Core/COMPANY-SOUL.md
+
+# 4. Start the engine
 python engine/engine.py --vault ./vault --watch
 
-# 3. Search your context from any terminal
-python engine/engine.py --vault ./vault --search "what is my content strategy"
+# 5. Connect your AI (see below)
+```
 
-# 4. Query via API (from any local AI or script)
+---
+
+## Connecting Your AI
+
+### Option A — MCP (Recommended for Claude, Cursor, Zed)
+
+MCP is Anthropic's open protocol. Any MCP-compatible AI gets your vault as tools + resources automatically.
+
+**Claude Desktop** (`~/.config/claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "command-center": {
+      "command": "python",
+      "args": ["/absolute/path/to/Command-Center-AI/engine/mcp_server.py"],
+      "env": {
+        "OMNI_VAULT_PATH": "/absolute/path/to/Command-Center-AI/vault",
+        "OMNI_ENGINE_URL": "http://127.0.0.1:8765"
+      }
+    }
+  }
+}
+```
+
+**Claude Code** (`.claude/mcp_config.json` in your project):
+```json
+{
+  "mcpServers": {
+    "command-center": {
+      "command": "python",
+      "args": ["/absolute/path/to/Command-Center-AI/engine/mcp_server.py"]
+    }
+  }
+}
+```
+
+Once connected, the AI gets these tools automatically:
+- `search_memory` — semantic search across your vault
+- `store` — save facts/decisions (engine auto-classifies into the right memory tier)
+- `read_vault_file` — read any vault document
+- `list_vault` — browse available notes
+
+### Option B — Network MCP via Streamable HTTP (NAS / Multi-Machine)
+
+**Why this exists**: stdio requires the MCP server to run on the same machine as the AI.
+If you have a NAS or home server, run one Command Center instance and connect every machine on your network to the same vault. One memory. Shared everywhere.
+
+**On your NAS/server:**
+```bash
+OMNI_MCP_KEY=your_secret_token \
+OMNI_VAULT_PATH=/path/to/vault \
+OMNI_ENGINE_URL=http://127.0.0.1:8765 \
+python engine/mcp_server.py --transport http --port 8766
+```
+
+**On every client machine** (`~/.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "command-center": {
+      "url": "http://YOUR_NAS_IP:8766/mcp",
+      "headers": { "Authorization": "Bearer your_secret_token" }
+    }
+  }
+}
+```
+
+> **Security**: The engine already has role-based Bearer tokens (read/write/admin). Add `OMNI_MCP_KEY` for the MCP HTTP layer too. Keep the engine on `localhost` — only the MCP server needs to be LAN-accessible.
+
+### Option C — REST API (For scripts and bots)
+
+```bash
+# Start engine
+python engine/engine.py --vault ./vault --watch
+
+# Search your vault
 curl -X POST "http://127.0.0.1:8765/search" \
   -H "Content-Type: application/json" \
-  -d '{"query":"risk management","k":5}'
-```
+  -d '{"query": "my trading strategy", "k": 5}'
 
----
-
-
-## App Mode (Thin Launcher)
-
-If you want this to feel like an app instead of manually managing processes:
-
-```bash
-# Health check your local setup
-python engine/omniscience.py doctor
-
-# Start in background (app mode)
-python engine/omniscience.py start --vault ./vault
-
-# Check status
-python engine/omniscience.py status
-
-# Show recent logs
-python engine/omniscience.py logs --lines 80
-
-# Stop
-python engine/omniscience.py stop
-```
-
-This wrapper does **not** replace your engine logic.
-It simply manages process lifecycle (start/stop/status/logs).
-
----
-
-## Nightly Self-Check + Cleanup
-
-You can enable automatic nightly maintenance (local-only):
-
-```bash
-chmod +x engine/install_nightly_timer.sh
-bash engine/install_nightly_timer.sh
-```
-
-What it does each night:
-- Runs `doctor` checks
-- Calls `POST /admin/cleanup` if engine is running
-- Writes logs to `.omniscience/nightly.log`
-
-Manual run:
-
-```bash
-python engine/nightly_maintenance.py
-```
-
----
-
-
-## API Auth (Optional, Recommended)
-
-Default mode is local-open if no API keys are set.
-
-Single-key mode (simplest):
-
-```bash
-export OMNI_API_KEY="replace-with-long-random-token"
-```
-
-Optional advanced split roles:
-
-```bash
-export OMNI_API_KEYS_READ="read_token"
-export OMNI_API_KEYS_WRITE="write_token"
-export OMNI_API_KEYS_ADMIN="admin_token"
-```
-
-Use bearer token in requests:
-
-```bash
-curl -X POST "http://127.0.0.1:8765/search" \
-  -H "Authorization: Bearer $OMNI_API_KEY" \
+# Store a memory
+curl -X POST "http://127.0.0.1:8765/capture" \
   -H "Content-Type: application/json" \
-  -d '{"query":"latest project decisions","k":5,"namespaces":["company_memory"]}'
+  -d '{"content": "User prefers Python over Node for data pipelines"}'
 ```
-
----
-
-## Why These Choices
-
-- **JSON body for `/search` and `/capture`**: better input validation, cleaner contracts for AIs/scripts, and avoids putting sensitive content in URL query strings.
-- **Why URL query strings are risky**: query params can leak into browser history, access logs, reverse-proxy logs, and monitoring tools.
-- **Bearer token auth**: simple, standard, and enough for local/LAN setups. Start with one key (`OMNI_API_KEY`), then split read/write/admin keys only if needed.
-- **Namespace filters**: keep big knowledge sets (e.g., cooking books) from polluting runtime project-memory retrieval.
-
-### Backend Structure (Why + How)
-
-- **`vault/` (source of truth)**
-  - Why: human-readable, portable, Obsidian-native knowledge base.
-  - How: all durable context is Markdown-first; engine reads from here.
-- **`engine/engine.py` (index + API core)**
-  - Why: one local process should both index and serve retrieval APIs.
-  - How: watches markdown, chunks text, embeds locally, writes LanceDB, exposes FastAPI.
-- **`.lancedb/` (semantic index)**
-  - Why: fast local vector search without running external DB infrastructure.
-  - How: embedded LanceDB table stores vectors + metadata for filtered retrieval.
-- **Role-based bearer auth**
-  - Why: keep local-first defaults but allow safe LAN usage when needed.
-  - How: optional read/write/admin token split via env vars.
-- **Anti-bloat controls**
-  - Why: prevent performance decay as context grows.
-  - How:
-    - file-hash manifest skips re-embedding unchanged files
-    - bounded query cache (TTL + max items)
-    - temp/log cleanup caps and nightly maintenance
-- **Thin launcher (`engine/omniscience.py`)**
-  - Why: app-like UX for non-fragile operations.
-  - How: consistent `start/stop/status/doctor/logs` wrapper over engine runtime.
-- **Nightly maintenance (`engine/nightly_maintenance.py`)**
-  - Why: automated health and cleanup reduces drift and runtime bloat.
-  - How: runs doctor checks + admin cleanup and logs results under `.omniscience/`.
-- **Migration model**
-  - Why: new machine recovery should be deterministic and fast.
-  - How: copy repo folder, install requirements, reindex from markdown source.
-
----
-
-## API Reference
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/health` | GET | Engine status + vault stats |
-| `/search` | POST (JSON) | Semantic search with optional filters |
-| `/capture` | POST (JSON) | Store a memory entry with metadata |
-| `/admin/reindex` | POST | Trigger background reindex (admin key) |
-| `/admin/cleanup` | POST | Run temp/cache cleanup (admin key) |
 
 ---
 
@@ -186,14 +141,55 @@ curl -X POST "http://127.0.0.1:8765/search" \
 
 ```
 vault/
-├── DASHBOARD.md          ← Live status (auto-updated by engine)
 ├── Core/
-│   ├── SOUL.md           ← AI identity & behavior rules
-│   ├── COMPANY-SOUL.md   ← Organization/project mission
-│   └── USER.md           ← User context (name, timezone, stack)
-├── Knowledge/            ← Your domain knowledge (strategies, docs)
-└── Archive/
-    └── MEMORY.md         ← Auto-captured facts and preferences
+│   ├── USER.md          ← Who you are (fill this in)
+│   ├── SOUL.md          ← AI identity & behavior rules (fill this in)
+│   └── COMPANY-SOUL.md  ← Organization/project mission (fill this in)
+├── Knowledge/           ← Your domain notes (strategies, docs, research)
+├── Archive/
+│   └── MEMORY.md        ← Auto-captured facts and decisions
+└── DASHBOARD.md         ← Live status (auto-updated by engine)
+```
+
+The three Core files are your foundation. Fill them in once and every AI session starts with full context.
+
+---
+
+## Connecting Other Folders
+
+Command Center is designed to connect to adjacent knowledge bases without bloating the core engine.
+
+```
+~/Documents/
+├── Command-Center-AI/     ← Core engine (this repo)
+├── MyBooks/               ← 10k book library
+├── WorkProject/           ← Project notes
+└── Research/              ← Domain research
+```
+
+Point the engine at any folder:
+```bash
+# Index an additional folder as a namespace
+python engine/engine.py --vault ./vault --extra-vault ../MyBooks --namespace books
+python engine/engine.py --vault ./vault --extra-vault ../Research --namespace research
+```
+
+Then query by namespace:
+```bash
+curl -X POST "http://127.0.0.1:8765/search" \
+  -d '{"query": "romance novels", "namespaces": ["books"]}'
+```
+
+---
+
+## App Mode (Background Process)
+
+```bash
+python engine/omniscience.py start --vault ./vault   # Start in background
+python engine/omniscience.py status                   # Check status
+python engine/omniscience.py logs --lines 50          # View logs
+python engine/omniscience.py stop                     # Stop
+python engine/omniscience.py doctor                   # Health check
 ```
 
 ---
@@ -202,46 +198,110 @@ vault/
 
 1. Install [Obsidian](https://obsidian.md) (free)
 2. Open `vault/` as a vault
-3. Enable **Graph View** (Core Plugins) to see nodes connect as context grows
-4. Optional: Install **DB Folder** plugin for database-style view of your context
+3. Enable **Graph View** (Core Plugins) — watch your knowledge map grow as context accumulates
+4. Optional: Install **DB Folder** plugin for database-style browsing
 
 ---
 
 ## Migrating to a New Machine
 
 ```bash
-# Copy the entire Command-Center-AI folder
-# On new machine:
+# 1. Copy the entire Command-Center-AI folder (vault/ included)
+# 2. On new machine:
 pip install -r engine/requirements.txt
 python engine/engine.py --vault ./vault --reindex
+# Done. LanceDB rebuilds from Markdown in seconds.
 ```
-That's it. LanceDB rebuilds from your Markdown files in seconds.
+
+Or put it on a USB drive. Runs anywhere Python runs.
 
 ---
 
-## Architecture Notes
+## Nightly Maintenance
 
-- **Embedding model**: `BAAI/bge-small-en-v1.5` — runs 100% locally, ~130MB, ~50ms/doc
-- **Vector DB**: LanceDB — embedded, disk-based, no server required (like SQLite for vectors)
-- **API**: FastAPI on `localhost:8765` by default — only accessible on your machine
-- **Auto-capture**: POST to `/capture` from any AI to store new facts permanently
-- **Anti-bloat controls**:
-  - file-hash manifest skips re-embedding unchanged markdown
-  - bounded in-memory query cache with TTL
-  - automatic temp/log cleanup with caps
-
-### Runtime Tuning (optional env vars)
+Auto-cleanup and health checks every night (prevents memory bloat):
 
 ```bash
-OMNI_QUERY_CACHE_TTL_SEC=3600
-OMNI_QUERY_CACHE_MAX_ITEMS=256
-OMNI_TMP_TTL_SEC=172800
-OMNI_TMP_MAX_FILES=400
-OMNI_LOG_MAX_BYTES=5242880
+chmod +x engine/install_nightly_timer.sh
+bash engine/install_nightly_timer.sh
 ```
+
+What it does:
+- Runs health checks
+- Cleans expired cache entries
+- Trims old logs
+- Keeps the engine lean
+
+---
+
+## API Reference
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/health` | GET | Engine status and vault stats |
+| `/search` | POST | Semantic search with optional namespace filter |
+| `/capture` | POST | Store a memory entry |
+| `/admin/reindex` | POST | Force full reindex (admin key required) |
+| `/admin/cleanup` | POST | Run cleanup (admin key required) |
+
+### Auth (Optional)
+
+```bash
+export OMNI_API_KEY="your-secret-token"
+
+curl -H "Authorization: Bearer $OMNI_API_KEY" ...
+```
+
+For LAN/network use, split read/write/admin tokens:
+```bash
+export OMNI_API_KEYS_READ="read_token"
+export OMNI_API_KEYS_WRITE="write_token"
+export OMNI_API_KEYS_ADMIN="admin_token"
+```
+
+---
+
+## Architecture
+
+| Component | Why | What |
+|---|---|---|
+| `vault/` | Human-readable, Obsidian-native | Markdown source of truth |
+| `engine/engine.py` | One process for index + API | Watches vault, embeds, serves search |
+| `.lancedb/` | Fast local vector search | Like SQLite but for vectors |
+| `engine/mcp_server.py` | Universal AI connector | MCP protocol — works with any compatible AI |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs |
+| `engine/nightly_maintenance.py` | Anti-bloat | Automated cleanup and health |
+
+- **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
+- **Vector DB**: LanceDB — embedded, disk-based, no server needed
+- **API**: FastAPI on `localhost:8765`
+- **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)
+
+---
+
+## Smart Connections Comparison
+
+If you know Obsidian's Smart Connections plugin, this is the self-hosted version — on steroids:
+
+| Feature | Smart Connections | Command Center |
+|---|---|---|
+| Semantic search | ✅ | ✅ |
+| Graph view | ✅ (Obsidian) | ✅ (Obsidian) |
+| Works across AI tools | ❌ (Obsidian only) | ✅ (MCP + REST) |
+| Network accessible | ❌ | ✅ |
+| Multiple vaults/namespaces | ❌ | ✅ |
+| API for scripts/bots | ❌ | ✅ |
+| Portable (USB) | Partial | ✅ |
+| No cloud | ✅ | ✅ |
 
 ---
 
 ## License
 
 MIT — use freely, modify freely, ship it.
+
+---
+
+## Contributing
+
+Issues and PRs welcome. The goal is a simple, portable, powerful memory layer — keep it lean.

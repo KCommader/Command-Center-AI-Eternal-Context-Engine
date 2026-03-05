@@ -1,9 +1,24 @@
 # LanceDB — rebuilt from vault, never commit
 .lancedb/
+vault/lancedb_unified/
+
+# Personal vault files — fill these in locally after cloning, never commit
+# Templates (*.example) are committed; your filled versions are ignored
+vault/Core/USER.md
+vault/Core/SOUL.md
+vault/Core/COMPANY-SOUL.md
+vault/Archive/MEMORY.md
+
+# Root-level personal files
+IDENTITY.md
+USER.md
 
 # Personal vault data — keep private
 my-vault/
 *.private.md
+
+# Scripts with personal data (wallets, keys, agent configs)
+scripts/wallets/agent_wallets.json
 
 # Python
 __pycache__/

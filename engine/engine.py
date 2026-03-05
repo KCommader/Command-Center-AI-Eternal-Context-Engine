@@ -15,6 +15,8 @@ Usage:
 API Endpoints (default http://127.0.0.1:8765):
   GET  /health
   POST /search
+  POST /search/grounded
+  GET  /policy/grounding
   POST /capture
   POST /admin/reindex
   POST /admin/cleanup
@@ -32,6 +34,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import threading
@@ -47,9 +50,16 @@ import uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import CrossEncoder, SentenceTransformer
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+
+# Memory tier classifier (local module)
+try:
+    from memory_classifier import classify, write_to_tier, MemoryTier
+    _CLASSIFIER_AVAILABLE = True
+except ImportError:
+    _CLASSIFIER_AVAILABLE = False
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 DEFAULT_VAULT = "./vault"
@@ -69,6 +79,81 @@ QUERY_CACHE_MAX_ITEMS = int(os.getenv("OMNI_QUERY_CACHE_MAX_ITEMS", "256"))
 TMP_FILE_TTL_SEC = int(os.getenv("OMNI_TMP_TTL_SEC", str(48 * 3600)))
 TMP_MAX_FILES = int(os.getenv("OMNI_TMP_MAX_FILES", "400"))
 LOG_MAX_BYTES = int(os.getenv("OMNI_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "1" if default else "0").strip().lower()
+    return raw not in {"0", "false", "no", "off", ""}
+
+
+DEFAULT_SEARCH_MODE = os.getenv("OMNI_DEFAULT_SEARCH_MODE", "balanced").strip().lower() or "balanced"
+GROUNDING_MIN_SIMILARITY_STRICT = float(os.getenv("OMNI_MIN_SIMILARITY_STRICT", "0.42"))
+GROUNDING_MIN_SIMILARITY_BALANCED = float(os.getenv("OMNI_MIN_SIMILARITY_BALANCED", "0.28"))
+GROUNDING_MIN_SIMILARITY_EXPLORATORY = float(os.getenv("OMNI_MIN_SIMILARITY_EXPLORATORY", "0.16"))
+GROUNDING_MIN_QUERY_TERM_COVERAGE_STRICT = float(os.getenv("OMNI_MIN_QUERY_TERM_COVERAGE_STRICT", "0.12"))
+GROUNDING_MIN_QUERY_TERM_COVERAGE_BALANCED = float(os.getenv("OMNI_MIN_QUERY_TERM_COVERAGE_BALANCED", "0.06"))
+GROUNDING_MIN_QUERY_TERM_COVERAGE_EXPLORATORY = float(
+    os.getenv("OMNI_MIN_QUERY_TERM_COVERAGE_EXPLORATORY", "0.00")
+)
+LEXICAL_MIN_TOKEN_LEN = int(os.getenv("OMNI_LEXICAL_MIN_TOKEN_LEN", "4"))
+RERANK_ENABLED = _env_flag("OMNI_RERANK_ENABLED", True)
+RERANK_MODEL_NAME = os.getenv("OMNI_RERANK_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2").strip()
+RERANK_CANDIDATES = int(os.getenv("OMNI_RERANK_CANDIDATES", "36"))
+RERANK_BATCH_SIZE = int(os.getenv("OMNI_RERANK_BATCH_SIZE", "16"))
+ENFORCE_ANSWER_CONTRACT_DEFAULT = _env_flag("OMNI_ENFORCE_ANSWER_CONTRACT", True)
+
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "how",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "was",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "will",
+    "with",
+}
+def _slug_for_config(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", value.strip().lower())
+    return cleaned.strip("_") or "default"
+
+
+def _namespace_set_from_env(name: str, default: str) -> set[str]:
+    return {
+        _slug_for_config(x)
+        for x in os.getenv(name, default).split(",")
+        if x.strip()
+    }
+
+
+TRUSTED_NAMESPACES = _namespace_set_from_env(
+    "OMNI_TRUSTED_NAMESPACES",
+    "company_core,company_memory,knowledge,projects,legal_ip,bots_runtime",
+)
+LOW_TRUST_NAMESPACES = _namespace_set_from_env(
+    "OMNI_LOW_TRUST_NAMESPACES",
+    "raw_chats,chat_imports,inbox,scratch,system_runtime,dashboard_md",
+)
 
 ROLE_RANK = {"read": 1, "write": 2, "admin": 3}
 
@@ -92,8 +177,14 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1)
     k: int = Field(default=5, ge=1, le=50)
     namespaces: list[str] | None = None
+    exclude_namespaces: list[str] | None = None
     tags: list[str] | None = None
     path_prefix: str | None = None
+    mode: str = Field(default=DEFAULT_SEARCH_MODE)
+    trusted_only: bool = False
+    min_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
+    require_grounded: bool = False
+    enforce_contract: bool | None = None
 
 
 class CaptureRequest(BaseModel):
@@ -142,10 +233,22 @@ def slug(s: str) -> str:
 
 def infer_namespace(rel_path: str) -> str:
     rel = rel_path.replace("\\", "/").lower()
+    if rel == "dashboard.md":
+        return "system_runtime"
+    if rel.startswith("archive/chats") or rel.startswith("archive/conversations"):
+        return "raw_chats"
+    if rel.startswith("imports/chats") or rel.startswith("inbox/chats"):
+        return "chat_imports"
     if rel.startswith("knowledge/books"):
         return "books_trading"
     if rel.startswith("projects/bots"):
         return "bots_runtime"
+    if rel.startswith("knowledge/"):
+        return "knowledge"
+    if rel.startswith("projects/"):
+        return "projects"
+    if rel.startswith("legal/"):
+        return "legal_ip"
     if rel.startswith("core/"):
         return "company_core"
     if rel.startswith("archive/"):
@@ -195,7 +298,7 @@ class OmniscienceEngine:
         self.log_file = self.runtime_dir / "engine.log"
         self.manifest_file = self.runtime_dir / INDEX_MANIFEST_FILE
         self.indexed_at: datetime | None = None
-        self._query_cache: OrderedDict[str, tuple[float, list[dict[str, Any]]]] = OrderedDict()
+        self._query_cache: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
         self._manifest: dict[str, dict[str, Any]] = {}
         self._cleanup_counter = 0
 
@@ -212,6 +315,17 @@ class OmniscienceEngine:
         print("   Loading embedding model (first run downloads ~130MB)...")
         self.model = SentenceTransformer(MODEL_NAME)
         print("   ✅ Model ready.\n")
+
+        self.reranker: CrossEncoder | None = None
+        if RERANK_ENABLED and RERANK_MODEL_NAME:
+            try:
+                print(f"   Loading reranker model ({RERANK_MODEL_NAME})...")
+                self.reranker = CrossEncoder(RERANK_MODEL_NAME)
+                print("   ✅ Reranker ready.\n")
+            except Exception as exc:
+                print(f"   ⚠️  Reranker disabled ({exc})\n")
+        else:
+            print("   Reranker disabled by config.\n")
 
         self.db = lancedb.connect(self.db_path)
         self.table = self._ensure_table()
@@ -258,31 +372,50 @@ class OmniscienceEngine:
         query: str,
         top_k: int,
         namespaces: list[str] | None,
+        exclude_namespaces: list[str] | None,
         tags: list[str] | None,
         path_prefix: str | None,
+        mode: str,
+        trusted_only: bool,
+        min_similarity: float | None,
+        require_grounded: bool,
+        enforce_contract: bool,
     ) -> str:
         ns, tg, pp = self._normalize_filters(namespaces, tags, path_prefix)
+        ex, _, _ = self._normalize_filters(exclude_namespaces, None, None)
         payload = json.dumps(
-            {"q": query.strip(), "k": top_k, "ns": ns, "tags": tg, "pp": pp},
+            {
+                "q": query.strip(),
+                "k": top_k,
+                "ns": ns,
+                "ex": ex,
+                "tags": tg,
+                "pp": pp,
+                "mode": mode,
+                "trusted_only": trusted_only,
+                "min_similarity": min_similarity,
+                "require_grounded": require_grounded,
+                "enforce_contract": enforce_contract,
+            },
             sort_keys=True,
             separators=(",", ":"),
         )
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def _query_cache_get(self, key: str) -> list[dict[str, Any]] | None:
+    def _query_cache_get(self, key: str) -> dict[str, Any] | None:
         now = time.time()
         hit = self._query_cache.get(key)
         if hit is None:
             return None
-        ts, rows = hit
+        ts, payload = hit
         if (now - ts) > QUERY_CACHE_TTL_SEC:
             self._query_cache.pop(key, None)
             return None
         self._query_cache.move_to_end(key)
-        return rows
+        return payload
 
-    def _query_cache_set(self, key: str, rows: list[dict[str, Any]]) -> None:
-        self._query_cache[key] = (time.time(), rows)
+    def _query_cache_set(self, key: str, payload: dict[str, Any]) -> None:
+        self._query_cache[key] = (time.time(), payload)
         self._query_cache.move_to_end(key)
         while len(self._query_cache) > QUERY_CACHE_MAX_ITEMS:
             self._query_cache.popitem(last=False)
@@ -455,10 +588,14 @@ class OmniscienceEngine:
         self,
         row: dict[str, Any],
         namespaces: set[str] | None,
+        exclude_namespaces: set[str] | None,
         tags: set[str] | None,
         path_prefix: str | None,
     ) -> bool:
-        if namespaces and str(row.get("namespace", "")) not in namespaces:
+        row_ns = slug(str(row.get("namespace", "")))
+        if namespaces and row_ns not in namespaces:
+            return False
+        if exclude_namespaces and row_ns in exclude_namespaces:
             return False
 
         if tags:
@@ -473,6 +610,257 @@ class OmniscienceEngine:
 
         return True
 
+    def _resolve_mode(self, mode: str) -> str:
+        candidate = slug(mode or DEFAULT_SEARCH_MODE)
+        if candidate not in {"strict", "balanced", "exploratory"}:
+            return "balanced"
+        return candidate
+
+    def _resolve_min_similarity(self, mode: str, min_similarity: float | None) -> float:
+        if min_similarity is not None:
+            return max(0.0, min(1.0, float(min_similarity)))
+        if mode == "strict":
+            return GROUNDING_MIN_SIMILARITY_STRICT
+        if mode == "exploratory":
+            return GROUNDING_MIN_SIMILARITY_EXPLORATORY
+        return GROUNDING_MIN_SIMILARITY_BALANCED
+
+    def _distance_to_similarity(self, distance: Any) -> float:
+        if distance is None:
+            return 0.0
+        try:
+            d = abs(float(distance))
+            return 1.0 / (1.0 + d)
+        except Exception:
+            return 0.0
+
+    def _tokenize_for_overlap(self, text: str) -> set[str]:
+        return {
+            tok
+            for tok in re.findall(r"[a-zA-Z0-9_]+", (text or "").lower())
+            if len(tok) >= LEXICAL_MIN_TOKEN_LEN and tok not in STOPWORDS
+        }
+
+    def _resolve_min_query_term_coverage(self, mode: str) -> float:
+        if mode == "strict":
+            return GROUNDING_MIN_QUERY_TERM_COVERAGE_STRICT
+        if mode == "exploratory":
+            return GROUNDING_MIN_QUERY_TERM_COVERAGE_EXPLORATORY
+        return GROUNDING_MIN_QUERY_TERM_COVERAGE_BALANCED
+
+    def _normalize_rerank_score(self, score: float | None) -> float:
+        if score is None:
+            return 0.0
+        x = max(-20.0, min(20.0, float(score)))
+        return 1.0 / (1.0 + math.exp(-x))
+
+    def _apply_reranker(self, query: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not rows or self.reranker is None:
+            return rows
+
+        candidate_n = max(1, min(len(rows), RERANK_CANDIDATES))
+        head = rows[:candidate_n]
+        tail = rows[candidate_n:]
+        pairs = [[query, str(r.get("text", ""))] for r in head]
+
+        try:
+            scores = self.reranker.predict(
+                pairs,
+                batch_size=RERANK_BATCH_SIZE,
+                show_progress_bar=False,
+            )
+        except Exception:
+            return rows
+
+        scored: list[dict[str, Any]] = []
+        for row, score in zip(head, scores):
+            item = dict(row)
+            rerank_score = float(score)
+            item["rerank_score"] = round(rerank_score, 4)
+            item["rerank_score_norm"] = round(self._normalize_rerank_score(rerank_score), 4)
+            scored.append(item)
+
+        scored.sort(
+            key=lambda r: (float(r.get("rerank_score_norm", 0.0)), float(r.get("similarity", 0.0))),
+            reverse=True,
+        )
+        return scored + tail
+
+    def _score_confidence(self, rows: list[dict[str, Any]]) -> float:
+        if not rows:
+            return 0.0
+        sims = [float(r.get("similarity", 0.0)) for r in rows]
+        sims.sort(reverse=True)
+        top = sims[0]
+        avg = sum(sims) / len(sims)
+        spread = top - sims[-1] if len(sims) > 1 else top
+
+        if any("rerank_score_norm" in r for r in rows):
+            reranks = [float(r.get("rerank_score_norm", 0.0)) for r in rows]
+            reranks.sort(reverse=True)
+            rr_top = reranks[0]
+            rr_avg = sum(reranks) / len(reranks)
+            confidence = (0.40 * top) + (0.20 * avg) + (0.30 * rr_top) + (0.10 * rr_avg)
+        else:
+            confidence = (0.55 * top) + (0.35 * avg) + (0.10 * min(1.0, spread + 0.2))
+
+        return round(max(0.0, min(1.0, confidence)), 4)
+
+    def search_with_grounding(
+        self,
+        query: str,
+        top_k: int = 5,
+        namespaces: list[str] | None = None,
+        exclude_namespaces: list[str] | None = None,
+        tags: list[str] | None = None,
+        path_prefix: str | None = None,
+        mode: str = DEFAULT_SEARCH_MODE,
+        trusted_only: bool = False,
+        min_similarity: float | None = None,
+        require_grounded: bool = False,
+        enforce_contract: bool | None = None,
+    ) -> dict[str, Any]:
+        resolved_mode = self._resolve_mode(mode)
+        sim_floor = self._resolve_min_similarity(resolved_mode, min_similarity)
+        term_coverage_floor = self._resolve_min_query_term_coverage(resolved_mode)
+        query_terms = self._tokenize_for_overlap(query)
+        contract_enforced = ENFORCE_ANSWER_CONTRACT_DEFAULT if enforce_contract is None else bool(enforce_contract)
+
+        ns_set = {slug(x) for x in namespaces} if namespaces else None
+        ex_set = {slug(x) for x in exclude_namespaces} if exclude_namespaces else set()
+        tag_set = {slug(x) for x in tags} if tags else None
+
+        if trusted_only or (resolved_mode == "strict" and ns_set is None):
+            ns_set = set(TRUSTED_NAMESPACES)
+
+        # Balanced/strict defaults should avoid low-trust chat namespaces unless explicitly requested.
+        if ns_set is None and resolved_mode in {"strict", "balanced"} and not trusted_only:
+            ex_set |= set(LOW_TRUST_NAMESPACES)
+        if trusted_only:
+            ex_set |= set(LOW_TRUST_NAMESPACES)
+        if ns_set:
+            ex_set -= ns_set
+
+        qkey = self._query_cache_key(
+            query=query,
+            top_k=top_k,
+            namespaces=sorted(ns_set) if ns_set else None,
+            exclude_namespaces=sorted(ex_set) if ex_set else None,
+            tags=tags,
+            path_prefix=path_prefix,
+            mode=resolved_mode,
+            trusted_only=trusted_only,
+            min_similarity=sim_floor,
+            require_grounded=require_grounded,
+            enforce_contract=contract_enforced,
+        )
+        cached = self._query_cache_get(qkey)
+        if cached is not None:
+            return cached
+
+        vec = self.embed([query])[0]
+        fetch_k = max(top_k * 8, 20)
+
+        rows = (
+            self.table.search(vec)
+            .limit(fetch_k)
+            .select(["path", "chunk_index", "text", "tags", "namespace", "source", "indexed_at", "_distance"])
+            .to_list()
+        )
+
+        filtered: list[dict[str, Any]] = []
+        for row in rows:
+            if not self._row_matches_filters(row, ns_set, ex_set, tag_set, path_prefix):
+                continue
+            similarity = self._distance_to_similarity(row.get("_distance"))
+            if similarity < sim_floor:
+                continue
+
+            row_terms = self._tokenize_for_overlap(str(row.get("text", "")))
+            lexical_overlap = 1.0
+            if query_terms:
+                lexical_overlap = len(query_terms & row_terms) / len(query_terms)
+
+            item = dict(row)
+            item["similarity"] = round(similarity, 4)
+            item["query_term_overlap"] = round(max(0.0, min(1.0, lexical_overlap)), 4)
+            item["evidence_id"] = f"{item.get('path', '')}:{int(item.get('chunk_index', 0))}"
+            filtered.append(item)
+
+        ordered = self._apply_reranker(query, filtered)
+        results = ordered[:top_k]
+
+        matched_query_terms: set[str] = set()
+        if query_terms and results:
+            for row in results:
+                matched_query_terms |= (query_terms & self._tokenize_for_overlap(str(row.get("text", ""))))
+        term_coverage = 1.0 if not query_terms else (len(matched_query_terms) / len(query_terms))
+
+        confidence = self._score_confidence(results)
+        verdict = "grounded"
+        reason = "sufficient evidence found"
+        if not results:
+            verdict = "insufficient_context"
+            reason = "no evidence passed filters/thresholds"
+        elif query_terms and term_coverage < term_coverage_floor:
+            verdict = "insufficient_context" if term_coverage == 0 else "weak_grounding"
+            reason = (
+                "query-term coverage too low "
+                f"({term_coverage:.2f} < {term_coverage_floor:.2f})"
+            )
+        elif confidence < max(0.35, sim_floor):
+            verdict = "low_confidence"
+            reason = "evidence relevance is weak"
+        elif len(results) < min(2, top_k):
+            verdict = "weak_grounding"
+            reason = "only one supporting chunk found"
+
+        allow_answer = verdict == "grounded"
+        if (require_grounded or contract_enforced) and not allow_answer:
+            results = []
+
+        grounding = {
+            "mode": resolved_mode,
+            "trusted_only": bool(trusted_only),
+            "min_similarity": round(sim_floor, 4),
+            "min_query_term_coverage": round(term_coverage_floor, 4),
+            "query_terms_count": len(query_terms),
+            "query_term_coverage": round(max(0.0, min(1.0, term_coverage)), 4),
+            "confidence": confidence,
+            "verdict": verdict,
+            "reason": reason,
+            "allowed_namespaces": sorted(ns_set) if ns_set else None,
+            "excluded_namespaces": sorted(ex_set) if ex_set else [],
+            "require_grounded": bool(require_grounded),
+            "answer_contract": {
+                "enforced": bool(contract_enforced),
+                "required_verdict": "grounded",
+                "allow_answer": bool(allow_answer),
+                "action": (
+                    "answer_with_citations_only"
+                    if allow_answer
+                    else "reject_answer_and_request_more_context"
+                ),
+            },
+            "reranker": {
+                "enabled": bool(self.reranker is not None),
+                "model": RERANK_MODEL_NAME if self.reranker is not None else None,
+                "candidates": min(len(filtered), RERANK_CANDIDATES),
+            },
+            "policy": {
+                "if_insufficient": "respond with 'insufficient evidence' and ask for narrower scope or more sources",
+                "citation_required": True,
+            },
+        }
+
+        payload = {"results": results, "grounding": grounding}
+        self._query_cache_set(qkey, payload)
+        self._cleanup_counter += 1
+        if self._cleanup_counter >= 50:
+            self._cleanup_counter = 0
+            self._cleanup_runtime_files()
+        return payload
+
     def search(
         self,
         query: str,
@@ -481,54 +869,54 @@ class OmniscienceEngine:
         tags: list[str] | None = None,
         path_prefix: str | None = None,
     ) -> list[dict[str, Any]]:
-        qkey = self._query_cache_key(query, top_k, namespaces, tags, path_prefix)
-        cached = self._query_cache_get(qkey)
-        if cached is not None:
-            return cached
-
-        vec = self.embed([query])[0]
-        fetch_k = max(top_k, top_k * 4)
-
-        rows = (
-            self.table.search(vec)
-            .limit(fetch_k)
-            .select(["path", "chunk_index", "text", "tags", "namespace", "source"])
-            .to_list()
+        payload = self.search_with_grounding(
+            query=query,
+            top_k=top_k,
+            namespaces=namespaces,
+            tags=tags,
+            path_prefix=path_prefix,
+            mode="balanced",
+            trusted_only=False,
+            min_similarity=None,
+            require_grounded=False,
+            enforce_contract=None,
         )
-
-        ns_set = {slug(x) for x in namespaces} if namespaces else None
-        tag_set = {slug(x) for x in tags} if tags else None
-
-        filtered = [r for r in rows if self._row_matches_filters(r, ns_set, tag_set, path_prefix)]
-        result = filtered[:top_k]
-        self._query_cache_set(qkey, result)
-        self._cleanup_counter += 1
-        if self._cleanup_counter >= 50:
-            self._cleanup_counter = 0
-            self._cleanup_runtime_files()
-        return result
+        return payload["results"]
 
     def capture(self, req: CaptureRequest) -> dict[str, Any]:
-        archive_dir = self.vault / "Archive"
-        archive_dir.mkdir(parents=True, exist_ok=True)
-
-        namespace = slug(req.namespace)
-        tag = slug(req.tag)
-        source = slug(req.source)
-
-        if req.file_name:
-            base = slug(req.file_name)
-            file_name = f"{base}.md" if not base.endswith(".md") else base
-        else:
-            date_stamp = datetime.utcnow().strftime("%Y-%m-%d")
-            file_name = f"capture-{date_stamp}.md"
-
-        target = archive_dir / file_name
         now_iso = datetime.utcnow().isoformat()
 
-        entry = f"- [{now_iso}] #{tag} [namespace={namespace}] [source={source}] — {req.text}\n"
-        with open(target, "a", encoding="utf-8") as f:
-            f.write(entry)
+        # Smart tier routing: classifier decides cache / short_term / long_term
+        if _CLASSIFIER_AVAILABLE and not req.file_name:
+            result = classify(req.text)
+            target = write_to_tier(
+                content=req.text,
+                tier=result.tier,
+                vault=self.vault,
+                category=result.category,
+                source=slug(req.source),
+            )
+            tier = result.tier.value
+            category = result.category
+        else:
+            # Fallback: original behaviour — write to Archive/
+            archive_dir = self.vault / "Archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            namespace = slug(req.namespace)
+            tag = slug(req.tag)
+            source = slug(req.source)
+            if req.file_name:
+                base = slug(req.file_name)
+                file_name = f"{base}.md" if not base.endswith(".md") else base
+            else:
+                date_stamp = datetime.utcnow().strftime("%Y-%m-%d")
+                file_name = f"capture-{date_stamp}.md"
+            target = archive_dir / file_name
+            entry = f"- [{now_iso}] #{tag} [namespace={namespace}] [source={source}] — {req.text}\n"
+            with open(target, "a", encoding="utf-8") as f:
+                f.write(entry)
+            tier = "archive"
+            category = tag
 
         self.index_file(target, quiet=True)
         self._invalidate_query_cache()
@@ -536,9 +924,9 @@ class OmniscienceEngine:
         return {
             "status": "captured",
             "file": str(target),
-            "namespace": namespace,
-            "tag": tag,
-            "source": source,
+            "tier": tier,
+            "category": category,
+            "source": req.source,
             "timestamp": now_iso,
         }
 
@@ -560,6 +948,13 @@ class OmniscienceEngine:
             "query_cache_max_items": QUERY_CACHE_MAX_ITEMS,
             "tmp_ttl_sec": TMP_FILE_TTL_SEC,
             "tmp_max_files": TMP_MAX_FILES,
+            "default_search_mode": DEFAULT_SEARCH_MODE,
+            "enforce_answer_contract_default": ENFORCE_ANSWER_CONTRACT_DEFAULT,
+            "reranker_enabled": bool(self.reranker is not None),
+            "reranker_model": RERANK_MODEL_NAME if self.reranker is not None else None,
+            "rerank_candidates": RERANK_CANDIDATES,
+            "trusted_namespaces": sorted(TRUSTED_NAMESPACES),
+            "low_trust_namespaces": sorted(LOW_TRUST_NAMESPACES),
         }
 
     def _update_dashboard(self, file_count: int, chunk_count: int):
@@ -596,6 +991,8 @@ class VaultWatcher(FileSystemEventHandler):
 
     def _relevant(self, path: str) -> bool:
         p = Path(path)
+        if p.name.lower() == "dashboard.md":
+            return False
         return p.suffix == ".md" and not any(part in IGNORED_DIRS for part in p.parts)
 
     def on_modified(self, event):
@@ -607,6 +1004,8 @@ class VaultWatcher(FileSystemEventHandler):
             self._pending.add(event.src_path)
 
     def flush(self):
+        if not self._pending:
+            return
         for path in list(self._pending):
             try:
                 self.engine.index_file(Path(path))
@@ -622,7 +1021,7 @@ class VaultWatcher(FileSystemEventHandler):
 
 # ─── FastAPI Server ───────────────────────────────────────────────────────────
 def create_app(engine: OmniscienceEngine) -> FastAPI:
-    app = FastAPI(title="Omniscience Engine", version="1.2.0")
+    app = FastAPI(title="Omniscience Engine", version="1.4.0")
 
     auth_cfg = load_auth_config()
     token_roles = build_token_roles(auth_cfg)
@@ -651,12 +1050,18 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
     @app.post("/search")
     def search(req: SearchRequest, authorization: str | None = Header(default=None, alias="Authorization")):
         require_role("read", authorization)
-        results = engine.search(
+        payload = engine.search_with_grounding(
             query=req.query,
             top_k=req.k,
             namespaces=req.namespaces,
+            exclude_namespaces=req.exclude_namespaces,
             tags=req.tags,
             path_prefix=req.path_prefix,
+            mode=req.mode,
+            trusted_only=req.trusted_only,
+            min_similarity=req.min_similarity,
+            require_grounded=req.require_grounded,
+            enforce_contract=req.enforce_contract,
         )
         return JSONResponse(
             {
@@ -664,10 +1069,67 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
                 "k": req.k,
                 "filters": {
                     "namespaces": req.namespaces,
+                    "exclude_namespaces": req.exclude_namespaces,
                     "tags": req.tags,
                     "path_prefix": req.path_prefix,
+                    "mode": req.mode,
+                    "trusted_only": req.trusted_only,
+                    "min_similarity": req.min_similarity,
+                    "require_grounded": req.require_grounded,
+                    "enforce_contract": req.enforce_contract,
                 },
-                "results": results,
+                "grounding": payload["grounding"],
+                "results": payload["results"],
+            }
+        )
+
+    @app.post("/search/grounded")
+    def search_grounded(req: SearchRequest, authorization: str | None = Header(default=None, alias="Authorization")):
+        require_role("read", authorization)
+        payload = engine.search_with_grounding(
+            query=req.query,
+            top_k=req.k,
+            namespaces=req.namespaces,
+            exclude_namespaces=req.exclude_namespaces,
+            tags=req.tags,
+            path_prefix=req.path_prefix,
+            mode=req.mode,
+            trusted_only=req.trusted_only,
+            min_similarity=req.min_similarity,
+            require_grounded=req.require_grounded,
+            enforce_contract=req.enforce_contract,
+        )
+        return JSONResponse(
+            {
+                "query": req.query,
+                "k": req.k,
+                "grounding": payload["grounding"],
+                "results": payload["results"],
+            }
+        )
+
+    @app.get("/policy/grounding")
+    def policy_grounding(authorization: str | None = Header(default=None, alias="Authorization")):
+        require_role("read", authorization)
+        return JSONResponse(
+            {
+                "version": "1.4.0",
+                "rules": [
+                    "Use only returned evidence chunks as factual basis.",
+                    "If verdict is not grounded, explicitly say evidence is insufficient.",
+                    "Do not infer facts that are absent from evidence.",
+                    "Require non-trivial query-term coverage in strict/balanced modes.",
+                    "Reject final answers when answer_contract.allow_answer is false.",
+                    "Use reranker priority when reranker is enabled.",
+                    "Cite evidence_id/path for each critical claim.",
+                    "Prefer trusted namespaces for operational decisions.",
+                ],
+                "recommended_system_prompt": (
+                    "Answer only using supplied evidence. "
+                    "If grounding verdict is insufficient_context, low_confidence, or weak_grounding, "
+                    "or answer_contract.allow_answer is false, state that evidence is insufficient and ask for narrower query or more sources. "
+                    "Never invent missing facts."
+                ),
             }
         )
 
