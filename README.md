@@ -218,12 +218,24 @@ python engine/omniscience.py doctor                   # Health check
 
 ---
 
-## Obsidian Setup
+## Obsidian — The Standard Interface
 
-1. Install [Obsidian](https://obsidian.md) (free)
-2. Open `vault/` as a vault
-3. Enable **Graph View** (Core Plugins) — watch your knowledge map grow as context accumulates
-4. Optional: Install **DB Folder** plugin for database-style browsing
+Command Center ships with Obsidian pre-configured. This is the intended way to view, browse, and manage your vault. It's not a setup step — it's already done.
+
+**Install [Obsidian](https://obsidian.md) (free), then open `vault/` as a vault. That's it.**
+
+What comes pre-configured out of the box:
+- **Graph View** — visual map of your entire knowledge base, auto-updates as memory grows
+- **File Explorer** — browse vault structure
+- **Backlinks** — see what connects to each note
+- **Properties** — structured metadata per note
+- **Search** — full-text search across all vault files
+- **Templates** — for consistent note structure
+- **Graph settings** — tuned for readability (node spacing, link distance, orphan visibility)
+
+> You can remove Obsidian entirely and use plain files if you prefer — the vault is just Markdown. But the graph view is worth keeping. Watching your AI's memory map grow over time is the whole point.
+
+**Don't want Obsidian?** Delete `.obsidian/` and use any text editor. Nothing breaks.
 
 ---
 

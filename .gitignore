@@ -36,7 +36,7 @@ dist/
 *.pem
 *.secret
 
-# Obsidian workspace state (machine-specific)
+# Obsidian — commit config/plugins, ignore only machine-specific workspace state
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 
