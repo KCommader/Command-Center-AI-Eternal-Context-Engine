@@ -9,8 +9,11 @@ export function apiHeaders() {
   return h
 }
 
-// In dev: routes through Vite proxy to http://localhost:8765
-// In prod: set VITE_ENGINE_URL or serve dashboard from same origin as engine
+// Dev:  Vite proxy strips /api → calls localhost:8765 directly
+// Prod: served by engine on same origin → no prefix needed
+// Remote: set VITE_ENGINE_URL=http://x.x.x.x:8765 in .env.local
 export function apiUrl(path) {
-  return ENGINE_URL ? `${ENGINE_URL}${path}` : `/api${path}`
+  if (ENGINE_URL) return `${ENGINE_URL}${path}`
+  if (import.meta.env.DEV) return `/api${path}`
+  return path  // same origin — engine serves both API and dashboard
 }

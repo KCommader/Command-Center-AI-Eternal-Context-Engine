@@ -28,6 +28,19 @@ if [[ ! -d "$VAULT" ]]; then
   exit 1
 fi
 
+# Build dashboard if node is available and dist doesn't exist
+DASHBOARD_DIR="${ROOT}/dashboard"
+if [[ ! -d "${DASHBOARD_DIR}/dist" ]]; then
+  if command -v node &>/dev/null && [[ -f "${DASHBOARD_DIR}/package.json" ]]; then
+    echo "Building dashboard..."
+    (cd "${DASHBOARD_DIR}" && npm install --silent && npm run build --silent)
+    echo "Dashboard built."
+  else
+    echo "Note: dashboard/dist not found and node not in PATH — engine will start without dashboard UI."
+    echo "To build: cd dashboard && npm install && npm run build"
+  fi
+fi
+
 mkdir -p "$SYSTEMD_USER_DIR"
 
 cat > "${SYSTEMD_USER_DIR}/${SERVICE_NAME}" <<EOF
@@ -60,5 +73,6 @@ echo "  systemctl --user stop ${SERVICE_NAME}"
 echo "  systemctl --user start ${SERVICE_NAME}"
 echo "  systemctl --user disable ${SERVICE_NAME}   # remove auto-start"
 echo ""
-echo "Vault: ${VAULT}"
-echo "Python: ${PY_BIN}"
+echo "Vault:     ${VAULT}"
+echo "Python:    ${PY_BIN}"
+echo "Dashboard: http://localhost:8765"
