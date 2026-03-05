@@ -39,7 +39,7 @@ import os
 import re
 import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -1027,6 +1027,32 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
     auth_cfg = load_auth_config()
     token_roles = build_token_roles(auth_cfg)
 
+    # ── Activity tracking ──────────────────────────────────────────────────────
+    activity_log: deque[dict] = deque(maxlen=200)
+    activity_lock = threading.Lock()
+
+    def _agent_name(authorization: str | None, x_agent_name: str | None) -> str:
+        """Resolve a human-readable agent name from headers."""
+        if x_agent_name:
+            return x_agent_name[:64].strip()
+        if authorization and authorization.startswith("Bearer ") and token_roles:
+            token = authorization.split(" ", 1)[1].strip()
+            role = token_roles.get(token)
+            if role:
+                return f"token:{role}"
+        return "anonymous"
+
+    def _log(agent: str, endpoint: str, detail: str = "") -> None:
+        entry = {
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "agent": agent,
+            "endpoint": endpoint,
+            "detail": detail,
+        }
+        with activity_lock:
+            activity_log.appendleft(entry)
+
+    # ── Auth ───────────────────────────────────────────────────────────────────
     def require_role(required: str, authorization: str | None):
         # Open mode when no auth keys are configured.
         if not token_roles:
@@ -1044,13 +1070,66 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
             raise HTTPException(status_code=403, detail="Insufficient role for endpoint")
 
     @app.get("/health")
-    def health(authorization: str | None = Header(default=None, alias="Authorization")):
+    def health(
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("read", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/health")
         return JSONResponse(engine.stats())
 
-    @app.post("/search")
-    def search(req: SearchRequest, authorization: str | None = Header(default=None, alias="Authorization")):
+    @app.get("/agents/activity")
+    def agents_activity(
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("read", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/agents/activity")
+
+        with activity_lock:
+            snapshot = list(activity_log)
+
+        # Build per-agent summary from log
+        seen: dict[str, dict] = {}
+        for entry in snapshot:
+            a = entry["agent"]
+            if a == "anonymous" and not seen.get(a):
+                pass  # still track anonymous
+            if a not in seen:
+                seen[a] = {
+                    "name": a,
+                    "first_seen": entry["ts"],
+                    "last_seen": entry["ts"],
+                    "last_action": entry["endpoint"],
+                    "calls": 0,
+                }
+            seen[a]["calls"] += 1
+            # snapshot is newest-first; first entry per agent = most recent
+            seen[a]["last_seen"] = entry["ts"]
+            seen[a]["last_action"] = entry["endpoint"]
+
+        # Flip: snapshot is newest-first, so iterate reversed for first_seen
+        for entry in reversed(snapshot):
+            a = entry["agent"]
+            if a in seen:
+                seen[a]["first_seen"] = entry["ts"]
+
+        agents_list = sorted(seen.values(), key=lambda x: x["last_seen"], reverse=True)
+
+        return JSONResponse({
+            "agents": agents_list,
+            "recent": snapshot[:50],
+            "total_logged": len(snapshot),
+        })
+
+    @app.post("/search")
+    def search(
+        req: SearchRequest,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
+        require_role("read", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/search", req.query)
         payload = engine.search_with_grounding(
             query=req.query,
             top_k=req.k,
@@ -1085,8 +1164,13 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         )
 
     @app.post("/search/grounded")
-    def search_grounded(req: SearchRequest, authorization: str | None = Header(default=None, alias="Authorization")):
+    def search_grounded(
+        req: SearchRequest,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("read", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/search/grounded", req.query)
         payload = engine.search_with_grounding(
             query=req.query,
             top_k=req.k,
@@ -1110,8 +1194,12 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         )
 
     @app.get("/policy/grounding")
-    def policy_grounding(authorization: str | None = Header(default=None, alias="Authorization")):
+    def policy_grounding(
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("read", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/policy/grounding")
         return JSONResponse(
             {
                 "version": "1.4.0",
@@ -1135,13 +1223,22 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         )
 
     @app.post("/capture")
-    def capture(req: CaptureRequest, authorization: str | None = Header(default=None, alias="Authorization")):
+    def capture(
+        req: CaptureRequest,
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("write", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/capture", req.text[:80] if req.text else "")
         return JSONResponse(engine.capture(req))
 
     @app.post("/admin/reindex")
-    def admin_reindex(authorization: str | None = Header(default=None, alias="Authorization")):
+    def admin_reindex(
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("admin", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/admin/reindex")
 
         def _run():
             engine.index_all(force=True)
@@ -1151,8 +1248,12 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         return JSONResponse({"status": "started", "action": "reindex"})
 
     @app.post("/admin/cleanup")
-    def admin_cleanup(authorization: str | None = Header(default=None, alias="Authorization")):
+    def admin_cleanup(
+        authorization: str | None = Header(default=None, alias="Authorization"),
+        x_agent_name: str | None = Header(default=None, alias="X-Agent-Name"),
+    ):
         require_role("admin", authorization)
+        _log(_agent_name(authorization, x_agent_name), "/admin/cleanup")
         engine._cleanup_runtime_files()
         return JSONResponse({"status": "ok", "action": "cleanup"})
 
