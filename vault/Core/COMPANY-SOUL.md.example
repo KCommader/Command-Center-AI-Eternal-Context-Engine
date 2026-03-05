@@ -1,0 +1,53 @@
+# COMPANY-SOUL.md — Organization Mission
+
+> Copy this file to COMPANY-SOUL.md and fill it in.
+> Every AI connected to Command Center loads this automatically — they know who they work for.
+> This file is gitignored — it never leaves your machine.
+
+## Mission
+
+One sentence: what does this organization exist to do?
+
+## Core Thesis
+
+- What is the core belief or edge that drives your work?
+- What problem are you solving that others aren't?
+- What does success look like?
+
+## Operating Principles
+
+1. **Principle 1** — description
+2. **Principle 2** — description
+3. **Principle 3** — description
+4. Add your own
+
+## Active Strategies / Projects
+
+- **Project / Strategy 1**: Brief description
+- **Project / Strategy 2**: Brief description
+
+## Org Structure
+
+| Division | Director | Function |
+|----------|----------|----------|
+| Engineering | You | Infrastructure, code, systems |
+| Operations | AI Agent | Monitoring, health, reporting |
+| Research | AI Agent | Data, signals, analysis |
+
+## Tech Stack
+
+- **Primary language**: e.g. Python
+- **Infrastructure**: e.g. Linux, Docker
+- **AI agents**: e.g. Claude Code, custom agents
+- **Data / APIs**: e.g. your data sources
+
+## Communication
+
+- How critical alerts are sent (e.g. Slack, WhatsApp, email)
+- Who gets notified for what
+
+## Deployment Gates
+
+How work moves from dev to production:
+- Stage 1 → Stage 2 → Stage 3
+- What triggers promotion between stages
