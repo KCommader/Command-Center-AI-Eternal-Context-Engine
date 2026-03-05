@@ -217,6 +217,29 @@ Or put it on a USB drive. Runs anywhere Python runs.
 
 ---
 
+## Memory Tiers — How Storage Works
+
+Command Center stores memory in three tiers automatically. You never classify manually — the engine's classifier reads the content and decides.
+
+| Tier | Location | TTL | What goes here |
+|------|----------|-----|----------------|
+| **cache** | `vault/Cache/session-YYYY-MM-DD.md` | Cleared nightly | Greetings, one-off questions, session noise |
+| **short_term** | `vault/Archive/short/YYYY-MM-DD.md` | 30 days | Active tasks, project state, in-progress work |
+| **long_term** | `vault/Archive/MEMORY.md` | Never expires | Preferences, decisions, identity rules, directives |
+
+**How classification works** (`engine/memory_classifier.py`):
+- Force keywords override everything: `"remember this"`, `"never forget"`, `"permanent"` → always long_term
+- Pattern matching scores content across all three tiers
+- Long-term signals: `always`, `never`, `decided`, `from now on`, `my wallet`, `tech stack`
+- Short-term signals: `working on`, `current task`, `blocked`, `this sprint`, `backtest result`
+- Cache signals: greetings, `just checking`, `show me`, `today`
+- Longest match wins; no signal defaults to short_term (better to keep than lose)
+- Very short content (<4 words) → cache; long structured content (>30 words, 3+ sentences) → boosts long_term
+
+**The AI calls `store("content")` — classifier routes it. That's the whole interface.**
+
+---
+
 ## Nightly Maintenance
 
 Auto-cleanup and health checks every night (prevents memory bloat):
@@ -227,10 +250,11 @@ bash engine/install_nightly_timer.sh
 ```
 
 What it does:
-- Runs health checks
-- Cleans expired cache entries
-- Trims old logs
-- Keeps the engine lean
+- **Engine health check** — runs `doctor` to verify vault + index are healthy
+- **Admin cleanup** — calls engine's `/admin/cleanup` endpoint if engine is running
+- **Cache purge** — deletes all files in `vault/Cache/` (session noise, not worth keeping)
+- **Short-term expiry** — removes files in `vault/Archive/short/` older than 30 days (configurable via `--short-term-ttl`)
+- Logs everything to `.omniscience/nightly.log`
 
 ---
 
@@ -267,15 +291,39 @@ export OMNI_API_KEYS_ADMIN="admin_token"
 |---|---|---|
 | `vault/` | Human-readable, Obsidian-native | Markdown source of truth |
 | `engine/engine.py` | One process for index + API | Watches vault, embeds, serves search |
-| `.lancedb/` | Fast local vector search | Like SQLite but for vectors |
-| `engine/mcp_server.py` | Universal AI connector | MCP protocol — works with any compatible AI |
+| `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
+| `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
+| `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
 | `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs |
-| `engine/nightly_maintenance.py` | Anti-bloat | Automated cleanup and health |
+| `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
+
+**Key design decisions:**
+- **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
+- **The AI never picks the memory tier** — `memory_classifier.py` does it based on content patterns. Keeps memory clean without requiring the AI to make judgment calls.
+- **Vault is air-gapped** — engine only listens on `127.0.0.1`. Nothing from the internet reaches your memory directly. Even browser automation results flow through you before anything gets stored.
+- **Role-based auth** — separate Bearer tokens for read/write/admin. Give each agent only the access it needs.
+- **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs the server on a NAS and serves any machine on your LAN from one vault.
 
 - **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
 - **Vector DB**: LanceDB — embedded, disk-based, no server needed
 - **API**: FastAPI on `localhost:8765`
 - **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)
+
+---
+
+## Scripts
+
+`scripts/` contains standalone tools and examples that work alongside the engine but aren't part of the core memory system.
+
+- **`scripts/browser_test.py`** — Example of using `browser-use` with the Anthropic API to give your AI a real browser. The AI can navigate pages, extract data, and fill forms. Results are returned to you — nothing is stored in the vault automatically (prompt injection protection).
+
+  ```bash
+  ANTHROPIC_API_KEY=your_key .venv/bin/python scripts/browser_test.py
+  ```
+
+  Swap the task string for anything: check prices, read dashboards, monitor pages. Uses Claude Haiku by default (cheapest). Change to `claude-sonnet-4-6` or `claude-opus-4-6` for harder tasks.
+
+> Add your own scripts here. Keep personal/sensitive scripts in subdirectories listed in `.gitignore`.
 
 ---
 

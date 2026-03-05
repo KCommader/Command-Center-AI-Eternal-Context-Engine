@@ -18,7 +18,7 @@ my-vault/
 *.private.md
 
 # Scripts with personal data (wallets, keys, agent configs)
-scripts/wallets/agent_wallets.json
+scripts/wallets/
 
 # Python
 __pycache__/
