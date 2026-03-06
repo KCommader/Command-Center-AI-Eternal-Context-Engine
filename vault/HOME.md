@@ -1,6 +1,9 @@
 ---
-aliases: [Home, Dashboard]
-cssclasses: [cc-home]
+aliases:
+  - Home
+  - Dashboard
+cssclasses:
+  - cc-home
 ---
 
 <div class="cc-hero">
@@ -85,6 +88,20 @@ cssclasses: [cc-home]
 > | **Logs** | `python engine/omniscience.py logs` |
 >
 > MCP connection configured in `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (Claude Desktop).
+
+---
+
+## Skills
+
+> [!skills] Available to Any Connected AI
+> Every AI connected via MCP or REST can use these capabilities. Add a file to `Skills/` to register a new skill — it appears here automatically.
+>
+> ```dataview
+> TABLE WITHOUT ID file.link AS "Skill", trigger AS "Trigger", description AS "What it does", category AS "Category"
+> FROM "Skills"
+> WHERE type = "skill"
+> SORT category ASC, file.name ASC
+> ```
 
 ---
 
