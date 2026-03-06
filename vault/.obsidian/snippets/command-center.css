@@ -147,23 +147,52 @@ body.theme-dark {
 
 /* ── HOME page hero ──────────────────────────────────────────── */
 .cc-home .cc-hero h1 {
-  font-size: 2.6em;
+  font-size: 2.8em;
   font-weight: 900;
-  background: linear-gradient(135deg, #c4b5fd, #8B5CF6, #00d4ff);
+  background: linear-gradient(120deg, #e0d4ff 0%, #a78bfa 40%, #00d4ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: -0.04em;
-  margin-bottom: 0.1em;
+  margin-bottom: 0.2em;
   line-height: 1.05;
   border-bottom: none;
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.4));
 }
 
 .cc-home .cc-hero strong {
-  color: var(--text-muted);
-  font-size: 0.95em;
+  color: #b0b0cc;
+  font-size: 1em;
   font-weight: 400;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  display: block;
+  margin-top: 0.2em;
+}
+
+/* ── Custom callout: [!skills] ───────────────────────────────── */
+.callout[data-callout="skills"] {
+  --callout-color: 0, 212, 255;
+  --callout-icon: cpu;
+}
+
+/* ── Callout content — ensure bright readable text ───────────── */
+.theme-dark .callout-content p,
+.theme-dark .callout-content li,
+.theme-dark .callout-content strong {
+  color: #d0d0e8;
+}
+
+.theme-dark .callout-content strong {
+  color: #e8e8ff;
+}
+
+/* Section headers — more separation and glow ─────────────────── */
+.cc-home .markdown-preview-view h2 {
+  color: #a78bfa;
+  border-bottom: 1px solid #1c1c2e;
+  padding-bottom: 0.25em;
+  margin-top: 1.8em;
+  text-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
 }
 
 /* ── Tables — Dataview ───────────────────────────────────────── */
