@@ -1,0 +1,319 @@
+{
+  "nodes": [
+    {
+      "id": "g-vault",
+      "type": "group",
+      "label": "YOUR VAULT",
+      "x": -1100,
+      "y": -380,
+      "width": 420,
+      "height": 720,
+      "color": "6"
+    },
+    {
+      "id": "f-home",
+      "type": "file",
+      "file": "HOME.md",
+      "x": -1080,
+      "y": -340,
+      "width": 380,
+      "height": 60
+    },
+    {
+      "id": "f-user",
+      "type": "file",
+      "file": "Core/USER.md",
+      "x": -1080,
+      "y": -260,
+      "width": 380,
+      "height": 60
+    },
+    {
+      "id": "f-soul",
+      "type": "file",
+      "file": "Core/SOUL.md",
+      "x": -1080,
+      "y": -180,
+      "width": 380,
+      "height": 60
+    },
+    {
+      "id": "f-csoul",
+      "type": "file",
+      "file": "Core/COMPANY-SOUL.md",
+      "x": -1080,
+      "y": -100,
+      "width": 380,
+      "height": 60
+    },
+    {
+      "id": "t-knowledge",
+      "type": "text",
+      "text": "**Knowledge/**\nDomain notes · research · references",
+      "x": -1080,
+      "y": -10,
+      "width": 185,
+      "height": 80,
+      "color": "4"
+    },
+    {
+      "id": "t-archive",
+      "type": "text",
+      "text": "**Archive/**\nlong_term · short_term · cache",
+      "x": -885,
+      "y": -10,
+      "width": 185,
+      "height": 80,
+      "color": "6"
+    },
+    {
+      "id": "t-vault-note",
+      "type": "text",
+      "text": "Plain Markdown. Open in any editor.\nObsidian is the recommended viewer.",
+      "x": -1080,
+      "y": 90,
+      "width": 380,
+      "height": 60
+    },
+    {
+      "id": "g-engine",
+      "type": "group",
+      "label": "ENGINE",
+      "x": -540,
+      "y": -300,
+      "width": 340,
+      "height": 600,
+      "color": "5"
+    },
+    {
+      "id": "t-api",
+      "type": "text",
+      "text": "**FastAPI**\nREST API on `localhost:8765`\n`/health` `/search` `/capture`\n`/admin/reindex` `/admin/cleanup`\n`/agents/activity`",
+      "x": -520,
+      "y": -260,
+      "width": 300,
+      "height": 130,
+      "color": "5"
+    },
+    {
+      "id": "t-lance",
+      "type": "text",
+      "text": "**LanceDB**\nLocal vector database — embedded, disk-based.\nNo server. ~50ms semantic search.\nAuto-built from Markdown.",
+      "x": -520,
+      "y": -110,
+      "width": 300,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "t-class",
+      "type": "text",
+      "text": "**Memory Classifier**\nAuto-routes content to the right tier.\nRule-based, ~1ms — no LLM required.\n`cache` · `short_term` · `long_term`",
+      "x": -520,
+      "y": 20,
+      "width": 300,
+      "height": 110,
+      "color": "5"
+    },
+    {
+      "id": "t-embed",
+      "type": "text",
+      "text": "**BAAI/bge-small-en-v1.5**\n100% local embedding model · ~130MB · ~50ms/doc",
+      "x": -520,
+      "y": 150,
+      "width": 300,
+      "height": 70,
+      "color": "5"
+    },
+    {
+      "id": "t-watcher",
+      "text": "**File Watcher**\nDetects vault changes and reindexes automatically.",
+      "type": "text",
+      "x": -520,
+      "y": 240,
+      "width": 300,
+      "height": 70
+    },
+    {
+      "id": "g-mcp",
+      "type": "group",
+      "label": "MCP SERVER",
+      "x": -60,
+      "y": -300,
+      "width": 300,
+      "height": 280,
+      "color": "3"
+    },
+    {
+      "id": "t-mcp-stdio",
+      "type": "text",
+      "text": "**stdio** (local, zero-config)\nSpawns with the AI client.\nWorks instantly — no port, no auth.",
+      "x": -40,
+      "y": -260,
+      "width": 260,
+      "height": 90,
+      "color": "3"
+    },
+    {
+      "id": "t-mcp-http",
+      "type": "text",
+      "text": "**Streamable HTTP** (LAN / NAS)\nBearer token auth · port 8766\nOne vault shared across all your machines.",
+      "x": -40,
+      "y": -150,
+      "width": 260,
+      "height": 100,
+      "color": "3"
+    },
+    {
+      "id": "t-mcp-tools",
+      "type": "text",
+      "text": "`search_memory` · `store` · `read_vault_file` · `list_vault`",
+      "x": -40,
+      "y": -30,
+      "width": 260,
+      "height": 50
+    },
+    {
+      "id": "g-rest",
+      "type": "group",
+      "label": "REST API",
+      "x": -60,
+      "y": 30,
+      "width": 300,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "t-rest",
+      "type": "text",
+      "text": "`POST /search` · `POST /capture`\n`GET /health` · `POST /admin/reindex`",
+      "x": -40,
+      "y": 60,
+      "width": 260,
+      "height": 80
+    },
+    {
+      "id": "g-ai",
+      "type": "group",
+      "label": "AI CLIENTS",
+      "x": 400,
+      "y": -300,
+      "width": 280,
+      "height": 320,
+      "color": "3"
+    },
+    {
+      "id": "t-cc",
+      "type": "text",
+      "text": "**Claude Code**\n`~/.claude/settings.json`",
+      "x": 420,
+      "y": -260,
+      "width": 240,
+      "height": 60,
+      "color": "3"
+    },
+    {
+      "id": "t-cd",
+      "type": "text",
+      "text": "**Claude Desktop**\n`claude_desktop_config.json`",
+      "x": 420,
+      "y": -180,
+      "width": 240,
+      "height": 60,
+      "color": "3"
+    },
+    {
+      "id": "t-cursor",
+      "type": "text",
+      "text": "**Cursor / Zed / Windsurf**\nstdio MCP — any compatible client",
+      "x": 420,
+      "y": -100,
+      "width": 240,
+      "height": 60,
+      "color": "3"
+    },
+    {
+      "id": "t-gemini",
+      "type": "text",
+      "text": "**Gemini CLI / OpenClaw**\nstdio or HTTP transport",
+      "x": 420,
+      "y": -20,
+      "width": 240,
+      "height": 60,
+      "color": "3"
+    },
+    {
+      "id": "g-scripts",
+      "type": "group",
+      "label": "SCRIPTS & BOTS",
+      "x": 400,
+      "y": 60,
+      "width": 280,
+      "height": 130,
+      "color": "2"
+    },
+    {
+      "id": "t-scripts",
+      "type": "text",
+      "text": "**Any language** via REST\nPython · Node · curl · bash · Go",
+      "x": 420,
+      "y": 90,
+      "width": 240,
+      "height": 80
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-vault-engine",
+      "fromNode": "g-vault",
+      "fromSide": "right",
+      "toNode": "g-engine",
+      "toSide": "left",
+      "label": "watches + indexes",
+      "color": "5"
+    },
+    {
+      "id": "e-engine-mcp",
+      "fromNode": "g-engine",
+      "fromSide": "right",
+      "toNode": "g-mcp",
+      "toSide": "left",
+      "label": "serves tools",
+      "color": "3"
+    },
+    {
+      "id": "e-engine-rest",
+      "fromNode": "g-engine",
+      "fromSide": "right",
+      "toNode": "g-rest",
+      "toSide": "left",
+      "label": "HTTP endpoints",
+      "color": "2"
+    },
+    {
+      "id": "e-mcp-ai",
+      "fromNode": "g-mcp",
+      "fromSide": "right",
+      "toNode": "g-ai",
+      "toSide": "left",
+      "color": "3"
+    },
+    {
+      "id": "e-rest-scripts",
+      "fromNode": "g-rest",
+      "fromSide": "right",
+      "toNode": "g-scripts",
+      "toSide": "left",
+      "color": "2"
+    },
+    {
+      "id": "e-ai-vault",
+      "fromNode": "g-ai",
+      "fromSide": "top",
+      "toNode": "g-vault",
+      "toSide": "top",
+      "label": "store() → classified → vault",
+      "color": "6"
+    }
+  ]
+}

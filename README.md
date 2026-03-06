@@ -175,13 +175,24 @@ python engine/omniscience.py doctor                   # Health check
 
 ---
 
-## Obsidian — The Standard Interface
+## Obsidian — The Intended Interface
 
-**Install [Obsidian](https://obsidian.md) (free), then open the `vault/` folder as a vault.**
+**[Install Obsidian](https://obsidian.md) (free), open the `vault/` folder as a vault.** Not the repo root — the `vault/` subfolder.
 
-The repo includes a `.obsidian/` config inside `vault/` that sets the graph color groups to match the vault structure (Core / Archive / Knowledge) so the graph is readable from day one. Everything else is standard Obsidian.
+The repo ships a complete `.obsidian/` config inside `vault/` with everything pre-wired:
 
-> The vault is plain Markdown. Use any editor you want — VS Code, Vim, nothing. Obsidian is just the recommended way to visualize it.
+| What's included | What it does |
+|---|---|
+| `HOME.md` | Dashboard landing page — live memory stats via Dataview, quick links to all core files |
+| `ARCHITECTURE.canvas` | Visual diagram of the full system: vault → engine → MCP → AI tools |
+| `snippets/command-center.css` | Electric blue accent (#00d4ff), custom callout types per memory tier, Dataview table polish |
+| `graph.json` | Color groups tuned for the vault: Core=blue, Archive=purple, Knowledge=green |
+| `bookmarks.json` | HOME.md and ARCHITECTURE.canvas pinned in the sidebar |
+| `Templates/` | Note templates for Knowledge entries and Decision Logs |
+
+**First thing to do after opening the vault:** Install the [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) community plugin (Settings → Community plugins → Browse → "Dataview"). HOME.md uses it for live memory queries — without it, queries show as code blocks.
+
+> The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
 
 ---
 

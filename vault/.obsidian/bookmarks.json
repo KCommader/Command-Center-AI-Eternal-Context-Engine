@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "type": "file",
+      "path": "HOME.md",
+      "title": "Command Center Home"
+    },
+    {
+      "type": "file",
+      "path": "ARCHITECTURE.canvas",
+      "title": "System Architecture"
+    },
+    {
+      "type": "group",
+      "title": "Core Identity",
+      "items": [
+        { "type": "file", "path": "Core/USER.md" },
+        { "type": "file", "path": "Core/SOUL.md" },
+        { "type": "file", "path": "Core/COMPANY-SOUL.md" }
+      ]
+    },
+    {
+      "type": "file",
+      "path": "Archive/MEMORY.md",
+      "title": "Long-Term Memory"
+    }
+  ]
+}

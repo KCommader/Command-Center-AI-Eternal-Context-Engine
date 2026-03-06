@@ -1,5 +1,6 @@
 {
   "theme": "moonstone",
   "cssTheme": "",
-  "accentColor": "#00d4ff"
+  "accentColor": "#00d4ff",
+  "enabledCssSnippets": ["command-center"]
 }

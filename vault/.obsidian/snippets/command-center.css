@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════════════════════
+   COMMAND CENTER AI — Obsidian Visual Skin
+   Electric blue (#00d4ff) · Dark-first · Dataview-aware
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Accent color ─────────────────────────────────────────────── */
+body {
+  --accent: #00d4ff;
+  --accent-h: 192;
+  --accent-s: 100%;
+  --accent-l: 50%;
+}
+
+/* ── Custom callout: [!identity] ──────────────────────────────── */
+.callout[data-callout="identity"] {
+  --callout-color: 0, 212, 255;
+  --callout-icon: user;
+}
+
+/* ── Custom callout: [!memory] ────────────────────────────────── */
+.callout[data-callout="memory"] {
+  --callout-color: 0, 212, 255;
+  --callout-icon: brain;
+}
+
+/* ── Custom callout: [!session] ───────────────────────────────── */
+.callout[data-callout="session"] {
+  --callout-color: 155, 89, 182;
+  --callout-icon: clock;
+}
+
+/* ── Custom callout: [!cache] ─────────────────────────────────── */
+.callout[data-callout="cache"] {
+  --callout-color: 100, 100, 120;
+  --callout-icon: archive;
+}
+
+/* ── Custom callout: [!knowledge] ────────────────────────────── */
+.callout[data-callout="knowledge"] {
+  --callout-color: 46, 204, 113;
+  --callout-icon: book-open;
+}
+
+/* ── Custom callout: [!engine] ────────────────────────────────── */
+.callout[data-callout="engine"] {
+  --callout-color: 230, 126, 34;
+  --callout-icon: zap;
+}
+
+/* ── HOME page hero (.cc-home) ────────────────────────────────── */
+
+.cc-home .cc-hero h1 {
+  font-size: 2.4em;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.15em;
+  line-height: 1.1;
+}
+
+.cc-home .cc-hero strong {
+  color: var(--text-muted);
+  font-size: 0.92em;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* Tighten callout spacing on the home page */
+.cc-home .callout-content {
+  padding: 10px 16px 14px;
+}
+
+/* ── Dataview table styling ───────────────────────────────────── */
+
+.table-view-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88em;
+  margin-top: 6px;
+}
+
+.table-view-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.76em;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.table-view-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(var(--mono-rgb-100), 0.05);
+  color: var(--text-normal);
+  vertical-align: middle;
+}
+
+.table-view-table tr:last-child td {
+  border-bottom: none;
+}
+
+.table-view-table tr:hover td {
+  background: var(--background-secondary);
+}
+
+/* ── Graph view — node glow ───────────────────────────────────── */
+
+.graph-view.color-fill {
+  opacity: 0.88;
+}
+
+/* ── Canvas — node text ───────────────────────────────────────── */
+
+.canvas-node-content.markdown-embed .markdown-embed-content h2 {
+  font-size: 1em;
+  color: var(--accent);
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ── Link hover accent ────────────────────────────────────────── */
+
+.internal-link:hover,
+.cm-hmd-internal-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
