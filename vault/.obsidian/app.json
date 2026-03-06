@@ -3,5 +3,7 @@
   "foldHeading": false,
   "newFileLocation": "folder",
   "newFileFolderPath": "Knowledge",
-  "attachmentFolderPath": "Knowledge/attachments"
+  "attachmentFolderPath": "Knowledge/attachments",
+  "userIgnoreFilters": ["Templates/"],
+  "showUnsupportedFiles": false
 }
