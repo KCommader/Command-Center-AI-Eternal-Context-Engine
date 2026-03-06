@@ -49,7 +49,6 @@ import pyarrow as pa
 import uvicorn
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sentence_transformers import CrossEncoder, SentenceTransformer
 from watchdog.events import FileSystemEventHandler
@@ -1256,11 +1255,6 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         _log(_agent_name(authorization, x_agent_name), "/admin/cleanup")
         engine._cleanup_runtime_files()
         return JSONResponse({"status": "ok", "action": "cleanup"})
-
-    # Serve dashboard — must be mounted last so API routes take priority
-    dashboard_dist = Path(__file__).parent.parent / "dashboard" / "dist"
-    if dashboard_dist.exists():
-        app.mount("/", StaticFiles(directory=dashboard_dist, html=True), name="dashboard")
 
     return app
 
