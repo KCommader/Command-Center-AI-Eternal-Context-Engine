@@ -3,7 +3,7 @@
   "search": "",
   "showTags": true,
   "showAttachments": false,
-  "hideUnresolved": false,
+  "hideUnresolved": true,
   "showOrphans": true,
   "collapse-color-groups": false,
   "colorGroups": [
@@ -13,17 +13,17 @@
     },
     {
       "query": "path:Archive/",
-      "color": { "a": 1, "rgb": 8716543 }
+      "color": { "a": 1, "rgb": 10181046 }
     },
     {
       "query": "path:Knowledge/",
-      "color": { "a": 1, "rgb": 3473965 }
+      "color": { "a": 1, "rgb": 3066993 }
     }
   ],
   "collapse-display": false,
   "showArrow": false,
   "textFadeMultiplier": 0,
-  "nodeSizeMultiplier": 1.2,
+  "nodeSizeMultiplier": 1.5,
   "lineSizeMultiplier": 1,
   "collapse-forces": true,
   "centerStrength": 0.5,
