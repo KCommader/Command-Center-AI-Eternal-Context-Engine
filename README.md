@@ -1,6 +1,6 @@
 <div align="center">
 
-# <img src="assets/logo.png" alt="" width="52" valign="middle" /> &nbsp;Command Center AI
+<img src="assets/logo.png" alt="Command Center AI" width="720" />
 
 ### Eternal Memory for Any AI — Local, Private, Portable
 
