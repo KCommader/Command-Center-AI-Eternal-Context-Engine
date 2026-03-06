@@ -1,6 +1,8 @@
 {
-  "theme": "moonstone",
+  "theme": "obsidian",
   "cssTheme": "",
-  "accentColor": "#00d4ff",
-  "enabledCssSnippets": ["command-center"]
+  "accentColor": "#8B5CF6",
+  "enabledCssSnippets": [
+    "command-center"
+  ]
 }
