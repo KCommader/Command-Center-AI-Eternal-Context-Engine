@@ -29,11 +29,6 @@ venv/
 *.egg-info/
 dist/
 
-# Node / dashboard
-node_modules/
-dashboard/dist/
-dashboard/.env.local
-
 # Environment / secrets
 .env
 .env.*
