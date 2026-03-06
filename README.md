@@ -46,16 +46,14 @@ Your Notes (Markdown)  →  Vault (Obsidian Graph View)
 git clone https://github.com/KCommader/Command-Center-AI-Eternal-Context-Engine
 cd Command-Center-AI
 
-# 2. Install
-pip install -r engine/requirements.txt
+# 2. Setup (creates venv, installs deps, scaffolds vault)
+bash setup.sh
 
-# 3. Fill in your identity (copy templates, then edit them)
-cp vault/Core/USER.md.example vault/Core/USER.md
-cp vault/Core/SOUL.md.example vault/Core/SOUL.md
-cp vault/Core/COMPANY-SOUL.md.example vault/Core/COMPANY-SOUL.md
+# 3. Fill in your identity
+# Edit: vault/Core/USER.md, vault/Core/SOUL.md, vault/Core/COMPANY-SOUL.md
 
 # 4. Start the engine
-python engine/engine.py --vault ./vault --watch
+python engine/omniscience.py start
 
 # 5. Connect your AI (see below)
 ```
@@ -133,7 +131,7 @@ python engine/mcp_server.py --transport http --port 8766
 
 ```bash
 # Start engine
-python engine/engine.py --vault ./vault --watch
+python engine/omniscience.py start
 
 # Search your vault
 curl -X POST "http://127.0.0.1:8765/search" \
@@ -157,39 +155,11 @@ vault/
 │   ├── SOUL.md          ← AI identity & behavior rules (fill this in)
 │   └── COMPANY-SOUL.md  ← Organization/project mission (fill this in)
 ├── Knowledge/           ← Your domain notes (strategies, docs, research)
-├── Archive/
-│   └── MEMORY.md        ← Auto-captured facts and decisions
-└── DASHBOARD.md         ← Live status (auto-updated by engine)
+└── Archive/
+    └── MEMORY.md        ← Auto-captured facts and decisions
 ```
 
 The three Core files are your foundation. Fill them in once and every AI session starts with full context.
-
----
-
-## Connecting Other Folders
-
-Command Center is designed to connect to adjacent knowledge bases without bloating the core engine.
-
-```
-~/Documents/
-├── Command-Center-AI/     ← Core engine (this repo)
-├── MyBooks/               ← 10k book library
-├── WorkProject/           ← Project notes
-└── Research/              ← Domain research
-```
-
-Point the engine at any folder:
-```bash
-# Index an additional folder as a namespace
-python engine/engine.py --vault ./vault --extra-vault ../MyBooks --namespace books
-python engine/engine.py --vault ./vault --extra-vault ../Research --namespace research
-```
-
-Then query by namespace:
-```bash
-curl -X POST "http://127.0.0.1:8765/search" \
-  -d '{"query": "romance novels", "namespaces": ["books"]}'
-```
 
 ---
 
@@ -207,22 +177,11 @@ python engine/omniscience.py doctor                   # Health check
 
 ## Obsidian — The Standard Interface
 
-Command Center ships with Obsidian pre-configured. This is the intended way to view, browse, and manage your vault. It's not a setup step — it's already done.
+**Install [Obsidian](https://obsidian.md) (free), then open the `vault/` folder as a vault.**
 
-**Install [Obsidian](https://obsidian.md) (free), then open `vault/` as a vault. That's it.**
+The repo includes a `.obsidian/` config inside `vault/` that sets the graph color groups to match the vault structure (Core / Archive / Knowledge) so the graph is readable from day one. Everything else is standard Obsidian.
 
-What comes pre-configured out of the box:
-- **Graph View** — visual map of your entire knowledge base, auto-updates as memory grows
-- **File Explorer** — browse vault structure
-- **Backlinks** — see what connects to each note
-- **Properties** — structured metadata per note
-- **Search** — full-text search across all vault files
-- **Templates** — for consistent note structure
-- **Graph settings** — tuned for readability (node spacing, link distance, orphan visibility)
-
-> You can remove Obsidian entirely and use plain files if you prefer — the vault is just Markdown. But the graph view is worth keeping. Watching your AI's memory map grow over time is the whole point.
-
-**Don't want Obsidian?** Delete `.obsidian/` and use any text editor. Nothing breaks.
+> The vault is plain Markdown. Use any editor you want — VS Code, Vim, nothing. Obsidian is just the recommended way to visualize it.
 
 ---
 
@@ -231,8 +190,8 @@ What comes pre-configured out of the box:
 ```bash
 # 1. Copy the entire Command-Center-AI folder (vault/ included)
 # 2. On new machine:
-pip install -r engine/requirements.txt
-python engine/engine.py --vault ./vault --reindex
+bash setup.sh
+python engine/omniscience.py start
 # Done. LanceDB rebuilds from Markdown in seconds.
 ```
 
@@ -347,23 +306,6 @@ export OMNI_API_KEYS_ADMIN="admin_token"
   Swap the task string for anything: check prices, read dashboards, monitor pages. Uses Claude Haiku by default (cheapest). Change to `claude-sonnet-4-6` or `claude-opus-4-6` for harder tasks.
 
 > Add your own scripts here. Keep personal/sensitive scripts in subdirectories listed in `.gitignore`.
-
----
-
-## Smart Connections Comparison
-
-If you know Obsidian's Smart Connections plugin, this is the self-hosted version — on steroids:
-
-| Feature | Smart Connections | Command Center |
-|---|---|---|
-| Semantic search | ✅ | ✅ |
-| Graph view | ✅ (Obsidian) | ✅ (Obsidian) |
-| Works across AI tools | ❌ (Obsidian only) | ✅ (MCP + REST) |
-| Network accessible | ❌ | ✅ |
-| Multiple vaults/namespaces | ❌ | ✅ |
-| API for scripts/bots | ❌ | ✅ |
-| Portable (USB) | Partial | ✅ |
-| No cloud | ✅ | ✅ |
 
 ---
 
