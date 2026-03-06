@@ -37,8 +37,9 @@ dist/
 *.secret
 
 # Obsidian — commit config/plugins, ignore only machine-specific workspace state
-.obsidian/workspace.json
-.obsidian/workspace-mobile.json
+# Vault is at vault/ — open that folder in Obsidian, not the repo root
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
 
 # OS
 .DS_Store

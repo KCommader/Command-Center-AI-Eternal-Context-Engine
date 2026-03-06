@@ -1,0 +1,35 @@
+{
+  "collapse-filter": false,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:Core/",
+      "color": { "a": 1, "rgb": 54527 }
+    },
+    {
+      "query": "path:Archive/",
+      "color": { "a": 1, "rgb": 8716543 }
+    },
+    {
+      "query": "path:Knowledge/",
+      "color": { "a": 1, "rgb": 3473965 }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.2,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 200,
+  "scale": 1,
+  "close": false
+}
