@@ -172,6 +172,35 @@ TOOLS = [
                 }
             }
         }
+    },
+    {
+        "name": "migrate_history",
+        "description": (
+            "Parse an AI provider export and write a full project history analysis "
+            "to vault/Migration/. Supports ChatGPT, Claude, and Gemini exports. "
+            "Output is gitignored — your data stays local. "
+            "Use this when migrating from another AI provider into Command Center."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "export_path": {
+                    "type": "string",
+                    "description": "Absolute path to the export folder or file"
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": ["chatgpt", "claude", "gemini", "auto"],
+                    "description": "Export format. Use 'auto' to detect automatically.",
+                    "default": "auto"
+                },
+                "output_name": {
+                    "type": "string",
+                    "description": "Optional custom output filename (e.g. 'MY_CHATGPT_ANALYSIS.md')"
+                }
+            },
+            "required": ["export_path"]
+        }
     }
 ]
 
@@ -324,6 +353,57 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
     elif name == "list_vault":
         files = _list_vault(arguments.get("directory", ""))
         return "\n".join(files) if files else "No markdown files found."
+
+    elif name == "migrate_history":
+        export_path = arguments.get("export_path", "").strip()
+        provider = arguments.get("provider", "auto")
+        output_name = arguments.get("output_name")
+
+        if not export_path:
+            return "export_path is required."
+
+        try:
+            repo_root = Path(__file__).parent.parent
+            sys.path.insert(0, str(repo_root))
+
+            from migration.classifier import Classifier
+            from migration.writer import write_analysis
+
+            if provider == "auto":
+                from migration.parsers import auto_detect
+                parser = auto_detect(export_path)
+                if not parser:
+                    return (
+                        "Could not auto-detect provider.\n"
+                        "Specify provider explicitly: chatgpt, claude, or gemini."
+                    )
+            else:
+                from migration.parsers import PARSERS
+                if provider not in PARSERS:
+                    return f"Unknown provider: {provider}. Options: chatgpt, claude, gemini, auto"
+                parser = PARSERS[provider](export_path)
+
+            summary = parser.parse()
+            Classifier().classify_batch(summary.conversations)
+            output = write_analysis(summary, VAULT_PATH, output_name)
+
+            from collections import Counter
+            cats = Counter(c.category for c in summary.conversations)
+            top_cats = "\n".join(
+                f"  {count:4d}  {cat}" for cat, count in cats.most_common(5)
+            )
+
+            return (
+                f"Migration complete.\n"
+                f"Provider: {summary.provider}\n"
+                f"Conversations: {summary.total}\n"
+                f"Date range: {summary.date_range[0]} → {summary.date_range[1]}\n"
+                f"Top categories:\n{top_cats}\n"
+                f"Output: vault/Migration/{output.name}\n"
+                f"Size: {output.stat().st_size // 1024} KB"
+            )
+        except Exception as e:
+            return f"Migration failed: {e}"
 
     return f"Unknown tool: {name}"
 

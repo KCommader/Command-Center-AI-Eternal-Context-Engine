@@ -9,6 +9,10 @@ vault/Core/SOUL.md
 vault/Core/COMPANY-SOUL.md
 vault/Archive/MEMORY.md
 
+# Migration output — analysis files are personal history, never commit
+# The migration/ tool ships with the repo; vault/Migration/ output does not
+vault/Migration/
+
 # Root-level personal files
 IDENTITY.md
 USER.md
@@ -35,6 +39,21 @@ dist/
 *.key
 *.pem
 *.secret
+
+# OpenClaw / KAI agent protocol files — personal, live at repo root for agent access
+SOUL.md
+USER.md
+IDENTITY.md
+AGENTS.md
+TOOLS.md
+HEARTBEAT.md
+MEMORY.md
+BOOTSTRAP.md
+DASHBOARD.md
+.clawhub/
+.openclaw/
+.obsidian/
+memory/
 
 # Obsidian — commit config/plugins, ignore only machine-specific workspace state
 # Vault is at vault/ — open that folder in Obsidian, not the repo root
