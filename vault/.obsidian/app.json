@@ -4,6 +4,10 @@
   "newFileLocation": "folder",
   "newFileFolderPath": "Knowledge",
   "attachmentFolderPath": "Knowledge/attachments",
-  "userIgnoreFilters": ["Templates/"],
-  "showUnsupportedFiles": false
+  "userIgnoreFilters": [
+    "Templates/",
+    "*.example"
+  ],
+  "showUnsupportedFiles": false,
+  "defaultBookmarkFiles": true
 }

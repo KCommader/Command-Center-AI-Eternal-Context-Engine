@@ -190,7 +190,7 @@ The repo ships a complete `.obsidian/` config inside `vault/` with everything pr
 | `bookmarks.json` | HOME.md and ARCHITECTURE.canvas pinned in the sidebar |
 | `Templates/` | Note templates for Knowledge entries and Decision Logs |
 
-**First thing to do after opening the vault:** Install the [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) community plugin (Settings → Community plugins → Browse → "Dataview"). HOME.md uses it for live memory queries — without it, queries show as code blocks.
+Dataview (MIT) is bundled — no plugin installation needed. Open the vault and it works.
 
 > The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
 

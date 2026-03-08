@@ -52,7 +52,7 @@ BOOTSTRAP.md
 DASHBOARD.md
 .clawhub/
 .openclaw/
-.obsidian/
+/.obsidian/
 memory/
 
 # Obsidian — commit config/plugins, ignore only machine-specific workspace state

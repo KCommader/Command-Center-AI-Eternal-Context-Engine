@@ -3,26 +3,46 @@
     {
       "type": "file",
       "path": "HOME.md",
-      "title": "Command Center Home"
+      "title": "⬡ HOME"
     },
     {
       "type": "file",
       "path": "ARCHITECTURE.canvas",
-      "title": "System Architecture"
+      "title": "◈ Architecture"
+    },
+    {
+      "type": "separator"
     },
     {
       "type": "group",
       "title": "Core Identity",
       "items": [
-        { "type": "file", "path": "Core/USER.md" },
-        { "type": "file", "path": "Core/SOUL.md" },
-        { "type": "file", "path": "Core/COMPANY-SOUL.md" }
+        { "type": "file", "path": "Core/USER.md", "title": "USER" },
+        { "type": "file", "path": "Core/SOUL.md", "title": "SOUL" },
+        { "type": "file", "path": "Core/COMPANY-SOUL.md", "title": "COMPANY SOUL" }
       ]
     },
     {
-      "type": "file",
-      "path": "Archive/MEMORY.md",
-      "title": "Long-Term Memory"
+      "type": "group",
+      "title": "Memory",
+      "items": [
+        { "type": "file", "path": "Archive/MEMORY.md", "title": "Long-Term Memory" }
+      ]
+    },
+    {
+      "type": "group",
+      "title": "Intelligence",
+      "items": [
+        { "type": "folder", "path": "Knowledge" },
+        { "type": "folder", "path": "Skills" }
+      ]
+    },
+    {
+      "type": "group",
+      "title": "History",
+      "items": [
+        { "type": "folder", "path": "Migration" }
+      ]
     }
   ]
 }
