@@ -22,5 +22,12 @@
   "publish": false,
   "sync": false,
   "bases": true,
-  "webviewer": false
+  "webviewer": false,
+  "footnotes": false,
+  "markdown-importer": false,
+  "zk-prefixer": false,
+  "random-note": false,
+  "slides": false,
+  "audio-recorder": false,
+  "workspaces": false
 }

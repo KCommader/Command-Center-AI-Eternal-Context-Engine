@@ -9,15 +9,24 @@
   "colorGroups": [
     {
       "query": "path:Core/",
-      "color": { "a": 1, "rgb": 54527 }
+      "color": {
+        "a": 1,
+        "rgb": 54527
+      }
     },
     {
       "query": "path:Archive/",
-      "color": { "a": 1, "rgb": 10181046 }
+      "color": {
+        "a": 1,
+        "rgb": 10181046
+      }
     },
     {
       "query": "path:Knowledge/",
-      "color": { "a": 1, "rgb": 3066993 }
+      "color": {
+        "a": 1,
+        "rgb": 3066993
+      }
     }
   ],
   "collapse-display": false,
@@ -30,6 +39,6 @@
   "repelStrength": 10,
   "linkStrength": 1,
   "linkDistance": 200,
-  "scale": 1,
+  "scale": 0.6666666666666666,
   "close": false
 }

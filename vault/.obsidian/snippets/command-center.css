@@ -1,301 +1,1031 @@
-/* ═══════════════════════════════════════════════════════════════
-   COMMAND CENTER AI — Full Dark Theme Override
-   Deep black · Dark purple · Electric blue data layer
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   COMMAND CENTER AI — Visual System v3 "Sovereign"
+   Built to look like a premium dark webapp, not a markdown editor.
+   ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Force dark mode variables ────────────────────────────────── */
+/* ── FONT IMPORT ──────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── 1. ROOT VARIABLES ────────────────────────────────────────────────── */
+:root {
+  --font-interface:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-text:          'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-monospace:     'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Brand palette */
+  --cc-purple:          #8B5CF6;
+  --cc-purple-mid:      #a78bfa;
+  --cc-purple-light:    #c4b5fd;
+  --cc-purple-dim:      rgba(139, 92, 246, 0.15);
+  --cc-cyan:            #00d4ff;
+  --cc-cyan-dim:        rgba(0, 212, 255, 0.12);
+  --cc-green:           #4ade80;
+  --cc-amber:           #f59e0b;
+  --cc-red:             #f87171;
+  --cc-pink:            #f472b6;
+
+  /* Folder colors */
+  --cc-core:            #00d4ff;
+  --cc-archive:         #a855f7;
+  --cc-knowledge:       #4ade80;
+  --cc-skills:          #22d3ee;
+  --cc-migration:       #f59e0b;
+  --cc-templates:       #64748b;
+}
+
 .theme-dark,
 body.theme-dark {
-  /* Backgrounds — near-black with faint purple tint */
-  --background-primary:          #0a0a12;
-  --background-primary-alt:      #0d0d18;
-  --background-secondary:        #07070f;
-  --background-secondary-alt:    #060610;
-  --background-modifier-border:  #1c1c2e;
-  --background-modifier-border-hover: #26263c;
-  --background-modifier-hover:   #13131f;
-  --background-modifier-active-hover: #1a1a2e;
-  --background-modifier-form-field: #0f0f1c;
-  --background-modifier-form-field-highlighted: #141428;
+  /* Backgrounds — deep space black */
+  --background-primary:                #07070f;
+  --background-primary-alt:            #09091a;
+  --background-secondary:              #050510;
+  --background-secondary-alt:          #040409;
+  --background-modifier-border:        #141428;
+  --background-modifier-border-hover:  #1e1e38;
+  --background-modifier-hover:         rgba(139, 92, 246, 0.06);
+  --background-modifier-active-hover:  rgba(139, 92, 246, 0.12);
+  --background-modifier-form-field:    #0b0b1e;
+  --background-modifier-form-field-highlighted: #10102a;
+  --background-modifier-success:       rgba(74, 222, 128, 0.12);
+  --background-modifier-error:         rgba(248, 113, 113, 0.12);
 
   /* Text */
-  --text-normal:    #e2e2f0;
-  --text-muted:     #8888aa;
-  --text-faint:     #44445a;
-  --text-on-accent: #ffffff;
-  --text-error:     #f87171;
-  --text-success:   #4ade80;
-  --text-accent:    #8B5CF6;
+  --text-normal:       #e0e0f4;
+  --text-muted:        #6666a0;
+  --text-faint:        #32325a;
+  --text-on-accent:    #ffffff;
+  --text-error:        #f87171;
+  --text-success:      #4ade80;
+  --text-accent:       #8B5CF6;
   --text-accent-hover: #a78bfa;
+  --text-highlight-bg: rgba(139, 92, 246, 0.22);
 
   /* Interactive */
   --interactive-accent:       #8B5CF6;
   --interactive-accent-hover: #7C3AED;
-  --interactive-normal:       #1e1e2e;
-  --interactive-hover:        #26263c;
+  --interactive-normal:       #12122a;
+  --interactive-hover:        #1a1a38;
   --interactive-accent-rgb:   139, 92, 246;
 
-  /* Nav / file tree */
-  --nav-item-color:            #9090b0;
-  --nav-item-color-hover:      #e2e2f0;
-  --nav-item-color-active:     #c4b5fd;
-  --nav-item-background-hover: #13131f;
-  --nav-item-background-active:#1a1a2e;
+  /* Nav */
+  --nav-item-color:             #55558a;
+  --nav-item-color-hover:       #c0c0e0;
+  --nav-item-color-active:      #c4b5fd;
+  --nav-item-background-hover:  rgba(139, 92, 246, 0.07);
+  --nav-item-background-active: rgba(139, 92, 246, 0.13);
+  --nav-indentation-guide-color: rgba(139, 92, 246, 0.1);
+
+  /* Tabs */
+  --tab-background-active: #09091a;
 
   /* Scrollbar */
-  --scrollbar-bg:    transparent;
-  --scrollbar-thumb-bg: #26263c;
+  --scrollbar-bg:       transparent;
+  --scrollbar-thumb-bg: #1a1a38;
 
-  /* Caret / cursor */
+  /* Caret */
   --caret-color: #8B5CF6;
 
   /* Canvas */
-  --canvas-background: #07070f;
-  --canvas-dot-pattern: #1a1a2e;
+  --canvas-background: #05050f;
+  --canvas-dot-pattern: #141428;
 }
 
-/* ── Typography — headers ────────────────────────────────────── */
+/* ── 2. GLOBAL FONT APPLICATION ───────────────────────────────────────── */
+.theme-dark,
+.theme-dark .view-content,
+.theme-dark .nav-files-container,
+.theme-dark .workspace {
+  font-family: var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── 3. READING VIEW LAYOUT ───────────────────────────────────────────── */
+.theme-dark .markdown-preview-view {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 40px 80px;
+  font-size: 15px;
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+}
+
+/* ── 4. TYPOGRAPHY ────────────────────────────────────────────────────── */
+
+/* H1 — full gradient, display weight */
 .theme-dark .markdown-preview-view h1,
 .theme-dark .cm-header-1 {
-  color: #c4b5fd;
-  font-size: 1.9em;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  border-bottom: 1px solid #1c1c2e;
-  padding-bottom: 0.3em;
-  margin-bottom: 0.6em;
-}
-
-.theme-dark .markdown-preview-view h2,
-.theme-dark .cm-header-2 {
-  color: #a78bfa;
-  font-size: 1.35em;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-top: 1.6em;
-}
-
-.theme-dark .markdown-preview-view h3,
-.theme-dark .cm-header-3 {
-  color: #8B5CF6;
-  font-size: 1.1em;
-  font-weight: 600;
-}
-
-/* ── Callouts — full card style ──────────────────────────────── */
-.theme-dark .callout {
-  background: rgba(13, 13, 24, 0.85);
-  border: 1px solid rgba(var(--callout-color), 0.25);
-  border-left: 3px solid rgba(var(--callout-color), 0.9);
-  border-radius: 6px;
-  padding: 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-}
-
-.theme-dark .callout-title {
-  background: rgba(var(--callout-color), 0.1);
-  border-radius: 5px 5px 0 0;
-  padding: 8px 14px;
-  font-weight: 600;
-  font-size: 0.85em;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.theme-dark .callout-content {
-  padding: 10px 16px 14px;
-  color: var(--text-normal);
-}
-
-/* ── Custom callout types ────────────────────────────────────── */
-
-/* [!identity] — violet */
-.callout[data-callout="identity"] {
-  --callout-color: 139, 92, 246;
-  --callout-icon: user;
-}
-
-/* [!memory] — electric blue */
-.callout[data-callout="memory"] {
-  --callout-color: 0, 212, 255;
-  --callout-icon: brain;
-}
-
-/* [!session] — purple */
-.callout[data-callout="session"] {
-  --callout-color: 155, 89, 182;
-  --callout-icon: clock;
-}
-
-/* [!cache] — dark gray */
-.callout[data-callout="cache"] {
-  --callout-color: 80, 80, 110;
-  --callout-icon: archive;
-}
-
-/* [!knowledge] — emerald */
-.callout[data-callout="knowledge"] {
-  --callout-color: 46, 204, 113;
-  --callout-icon: book-open;
-}
-
-/* [!engine] — amber */
-.callout[data-callout="engine"] {
-  --callout-color: 230, 126, 34;
-  --callout-icon: zap;
-}
-
-/* ── HOME page hero ──────────────────────────────────────────── */
-.cc-home .cc-hero h1 {
-  font-size: 2.8em;
+  font-family: var(--font-text);
+  font-size: 2.2em;
   font-weight: 900;
-  background: linear-gradient(120deg, #e0d4ff 0%, #a78bfa 40%, #00d4ff 100%);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  background: linear-gradient(115deg, #f0e8ff 0%, #c4b5fd 30%, #8B5CF6 65%, #00d4ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  letter-spacing: -0.04em;
-  margin-bottom: 0.2em;
-  line-height: 1.05;
-  border-bottom: none;
-  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.4));
+  border: none;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+  padding-bottom: 0.4em;
+  margin-bottom: 0.5em;
+  filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.3));
 }
 
-.cc-home .cc-hero strong {
-  color: #b0b0cc;
-  font-size: 1em;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  display: block;
-  margin-top: 0.2em;
-}
-
-/* ── Custom callout: [!skills] ───────────────────────────────── */
-.callout[data-callout="skills"] {
-  --callout-color: 0, 212, 255;
-  --callout-icon: cpu;
-}
-
-/* ── Callout content — ensure bright readable text ───────────── */
-.theme-dark .callout-content p,
-.theme-dark .callout-content li,
-.theme-dark .callout-content strong {
-  color: #d0d0e8;
-}
-
-.theme-dark .callout-content strong {
-  color: #e8e8ff;
-}
-
-/* Section headers — more separation and glow ─────────────────── */
-.cc-home .markdown-preview-view h2 {
+/* H2 — purple, faint glow underline */
+.theme-dark .markdown-preview-view h2,
+.theme-dark .cm-header-2 {
+  font-size: 1.28em;
+  font-weight: 700;
   color: #a78bfa;
-  border-bottom: 1px solid #1c1c2e;
+  letter-spacing: -0.02em;
+  margin-top: 2em;
+  margin-bottom: 0.6em;
   padding-bottom: 0.25em;
-  margin-top: 1.8em;
-  text-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+  text-shadow: 0 0 24px rgba(139, 92, 246, 0.2);
 }
 
-/* ── Tables — Dataview ───────────────────────────────────────── */
+/* H2 section marker */
+.theme-dark .markdown-preview-view h2::before {
+  content: "// ";
+  color: rgba(139, 92, 246, 0.3);
+  font-family: var(--font-monospace);
+  font-size: 0.75em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* H3 — cyan */
+.theme-dark .markdown-preview-view h3,
+.theme-dark .cm-header-3 {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: #67e8f9;
+  letter-spacing: 0.01em;
+  margin-top: 1.5em;
+  margin-bottom: 0.4em;
+}
+
+/* H4 — label style */
+.theme-dark .markdown-preview-view h4,
+.theme-dark .cm-header-4 {
+  font-size: 0.78em;
+  font-weight: 700;
+  color: #44447a;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 1.2em;
+}
+
+/* ── 5. PARAGRAPH + BODY ──────────────────────────────────────────────── */
+.theme-dark .markdown-preview-view p {
+  color: #cccce8;
+  margin-bottom: 0.85em;
+}
+
+.theme-dark .markdown-preview-view strong {
+  color: #f0f0ff;
+  font-weight: 700;
+}
+
+.theme-dark .markdown-preview-view em {
+  color: #b0a0e0;
+  font-style: italic;
+}
+
+.theme-dark .markdown-preview-view strong em,
+.theme-dark .markdown-preview-view em strong {
+  color: #c4b5fd;
+}
+
+/* ── 6. LISTS ─────────────────────────────────────────────────────────── */
+.theme-dark .markdown-preview-view ul > li::marker {
+  color: rgba(139, 92, 246, 0.45);
+}
+.theme-dark .markdown-preview-view ol > li::marker {
+  color: rgba(0, 212, 255, 0.55);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 7. CALLOUTS — GLASSMORPHISM CARDS ───────────────────────────────── */
+.theme-dark .callout {
+  background: linear-gradient(
+    140deg,
+    rgba(7, 7, 15, 0.92) 0%,
+    rgba(var(--callout-color), 0.05) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(var(--callout-color), 0.18);
+  border-left: 3px solid rgba(var(--callout-color), 0.9);
+  border-radius: 10px;
+  padding: 0;
+  margin: 1.2em 0;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.03) inset,
+    0 4px 20px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(var(--callout-color), 0.06) inset;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.theme-dark .callout:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 0 rgba(255,255,255,0.04) inset,
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    0 0 28px rgba(var(--callout-color), 0.08);
+}
+
+.theme-dark .callout-title {
+  background: rgba(var(--callout-color), 0.07);
+  border-bottom: 1px solid rgba(var(--callout-color), 0.1);
+  padding: 9px 16px;
+  font-family: var(--font-text);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--callout-color));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-dark .callout-title-icon {
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+
+.theme-dark .callout-content {
+  padding: 14px 18px 16px;
+  line-height: 1.65;
+}
+
+.theme-dark .callout-content p { color: #c4c4e4; }
+.theme-dark .callout-content li { color: #b8b8dc; }
+.theme-dark .callout-content strong { color: #e8e8ff; }
+
+.theme-dark .callout-content code {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(var(--callout-color), 0.2);
+  color: rgb(var(--callout-color));
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.87em;
+}
+
+/* Folded callout */
+.theme-dark .callout.is-collapsed .callout-title {
+  border-bottom: none;
+}
+
+/* ── 8. CALLOUT TYPES ─────────────────────────────────────────────────── */
+
+.callout[data-callout="identity"]  { --callout-color: 139, 92, 246;  --callout-icon: user; }
+.callout[data-callout="memory"]    { --callout-color: 0, 212, 255;   --callout-icon: brain; }
+.callout[data-callout="session"]   { --callout-color: 155, 89, 182;  --callout-icon: clock; }
+.callout[data-callout="cache"]     { --callout-color: 80, 80, 120;   --callout-icon: archive; }
+.callout[data-callout="knowledge"] { --callout-color: 46, 204, 113;  --callout-icon: book-open; }
+.callout[data-callout="engine"]    { --callout-color: 230, 126, 34;  --callout-icon: zap; }
+.callout[data-callout="skills"]    { --callout-color: 0, 212, 255;   --callout-icon: cpu; }
+
+/* Migration analysis callouts */
+.callout[data-callout="crypto"]     { --callout-color: 245, 158, 11;  --callout-icon: trending-up; }
+.callout[data-callout="ai-bots"]    { --callout-color: 0, 212, 255;   --callout-icon: cpu; }
+.callout[data-callout="web3"]       { --callout-color: 139, 92, 246;  --callout-icon: layers; }
+.callout[data-callout="flutter"]    { --callout-color: 16, 185, 129;  --callout-icon: smartphone; }
+.callout[data-callout="webdev"]     { --callout-color: 249, 115, 22;  --callout-icon: code; }
+.callout[data-callout="fitness"]    { --callout-color: 34, 197, 94;   --callout-icon: activity; }
+.callout[data-callout="business"]   { --callout-color: 239, 68, 68;   --callout-icon: briefcase; }
+.callout[data-callout="creative"]   { --callout-color: 236, 72, 153;  --callout-icon: pen-tool; }
+.callout[data-callout="personal"]   { --callout-color: 148, 163, 184; --callout-icon: user; }
+.callout[data-callout="devops"]     { --callout-color: 6, 182, 212;   --callout-icon: server; }
+.callout[data-callout="python"]     { --callout-color: 99, 102, 241;  --callout-icon: database; }
+.callout[data-callout="other"]      { --callout-color: 100, 116, 139; --callout-icon: archive; }
+
+.callout[data-callout="discussion"] {
+  --callout-color: 71, 85, 105;
+  --callout-icon: message-circle;
+  font-size: 0.87em;
+}
+.callout[data-callout="discussion"] .callout-title {
+  font-size: 0.72em;
+  opacity: 0.65;
+}
+
+.callout[data-callout="migration"] {
+  --callout-color: 0, 212, 255;
+  --callout-icon: download;
+}
+.callout[data-callout="migration"] .callout-title {
+  font-size: 0.95em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* ── 9. TABLES ────────────────────────────────────────────────────────── */
+.theme-dark table,
 .table-view-table {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 0.87em;
-  margin-top: 4px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.88em;
+  border: 1px solid #141428;
+  border-radius: 10px;
+  overflow: hidden;
+  margin: 1.2em 0;
 }
 
+.theme-dark thead tr,
+.table-view-table tr:first-child {
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.theme-dark th,
 .table-view-table th {
-  color: var(--text-faint);
-  font-weight: 500;
+  color: #44447a;
+  font-size: 0.7em;
+  font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.74em;
-  letter-spacing: 0.07em;
-  border-bottom: 1px solid var(--background-modifier-border);
-  padding: 5px 10px 6px;
+  letter-spacing: 0.09em;
+  padding: 10px 14px;
   text-align: left;
+  border-bottom: 1px solid #141428;
 }
 
+.theme-dark td,
 .table-view-table td {
-  padding: 5px 10px;
-  border-bottom: 1px solid rgba(28, 28, 46, 0.6);
-  color: var(--text-normal);
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(20, 20, 40, 0.8);
+  color: #c0c0e0;
   vertical-align: middle;
-}
-
-.table-view-table tr:last-child td {
-  border-bottom: none;
-}
-
-.table-view-table tr:hover td {
-  background: #13131f;
-}
-
-/* ── Sidebar ─────────────────────────────────────────────────── */
-.theme-dark .workspace-leaf-content[data-type="file-explorer"] {
-  background: var(--background-secondary);
-}
-
-.theme-dark .nav-folder-title,
-.theme-dark .nav-file-title {
-  border-radius: 4px;
   transition: background 0.1s;
 }
 
-/* ── Tags ────────────────────────────────────────────────────── */
-.theme-dark .tag {
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
-  border-radius: 4px;
-  padding: 1px 7px;
-  font-size: 0.8em;
-}
+.theme-dark tr:last-child td { border-bottom: none; }
+.theme-dark tbody tr:hover td,
+.table-view-table tr:hover td { background: rgba(139, 92, 246, 0.05); }
 
-/* ── Inline code ─────────────────────────────────────────────── */
+/* Table — inline code in cells */
+.theme-dark td code { font-size: 0.85em; }
+
+/* ── 10. CODE ─────────────────────────────────────────────────────────── */
 .theme-dark code {
-  background: #13131f;
+  font-family: var(--font-monospace);
+  background: rgba(0, 212, 255, 0.05);
   color: #00d4ff;
-  border: 1px solid #1c1c2e;
-  border-radius: 3px;
-  padding: 1px 5px;
-  font-size: 0.88em;
+  border: 1px solid rgba(0, 212, 255, 0.12);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 0.87em;
 }
 
-/* ── Code blocks ─────────────────────────────────────────────── */
 .theme-dark pre {
-  background: #0d0d18 !important;
-  border: 1px solid #1c1c2e;
-  border-radius: 6px;
+  font-family: var(--font-monospace);
+  background: #060614 !important;
+  border: 1px solid #1a1a30;
+  border-radius: 10px;
+  padding: 20px 22px;
+  overflow-x: auto;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Horizontal rule ─────────────────────────────────────────── */
-.theme-dark hr {
-  border-color: #1c1c2e;
-  margin: 1.6em 0;
+.theme-dark pre::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #8B5CF6 0%, #00d4ff 50%, #4ade80 100%);
+  opacity: 0.6;
+  border-radius: 10px 10px 0 0;
 }
 
-/* ── Links ───────────────────────────────────────────────────── */
+.theme-dark pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: #d0d0f0;
+  font-size: 0.9em;
+  line-height: 1.65;
+}
+
+.theme-dark .code-block-flair {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: #8B5CF6;
+  border-radius: 5px;
+  font-size: 0.7em;
+  font-family: var(--font-monospace);
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+/* ── 11. LINKS ────────────────────────────────────────────────────────── */
 .theme-dark a.internal-link {
   color: #a78bfa;
   text-decoration: none;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+  border-bottom: 1px solid rgba(139, 92, 246, 0.2);
+  transition: color 0.15s, border-color 0.15s, text-shadow 0.15s;
+  padding-bottom: 1px;
+}
+.theme-dark a.internal-link:hover {
+  color: #ddd6fe;
+  border-bottom-color: #8B5CF6;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+.theme-dark a.external-link {
+  color: #67e8f9;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.18);
   transition: color 0.15s, border-color 0.15s;
 }
-
-.theme-dark a.internal-link:hover {
-  color: #c4b5fd;
-  border-bottom-color: #8B5CF6;
+.theme-dark a.external-link:hover {
+  color: #a5f3fc;
+  border-bottom-color: #00d4ff;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────── */
+/* Unresolved link */
+.theme-dark a.internal-link.is-unresolved {
+  color: #3a3a60;
+  border-bottom-color: rgba(58, 58, 96, 0.3);
+}
+
+/* ── 12. BLOCKQUOTES ──────────────────────────────────────────────────── */
+.theme-dark blockquote {
+  border-left: 2px solid rgba(139, 92, 246, 0.4);
+  background: rgba(139, 92, 246, 0.04);
+  margin: 1em 0;
+  padding: 12px 18px;
+  border-radius: 0 8px 8px 0;
+  color: #9999c0;
+  font-style: italic;
+}
+
+/* ── 13. HORIZONTAL RULES ─────────────────────────────────────────────── */
+.theme-dark .markdown-preview-view hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #1e1e38 30%, #1e1e38 70%, transparent);
+  margin: 2em 0;
+  position: relative;
+}
+.theme-dark .markdown-preview-view hr::after {
+  content: "◆";
+  position: absolute;
+  top: -0.6em;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65em;
+  color: #242450;
+  background: var(--background-primary);
+  padding: 0 10px;
+  letter-spacing: 0.2em;
+}
+
+/* ── 14. TAGS ─────────────────────────────────────────────────────────── */
+.theme-dark .tag {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #c4b5fd;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: background 0.15s, border-color 0.15s;
+  text-decoration: none;
+}
+.theme-dark .tag:hover {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.45);
+}
+
+/* ── 15. CHECKBOXES ───────────────────────────────────────────────────── */
+.theme-dark input[type="checkbox"] {
+  border: 2px solid #2a2a4a;
+  border-radius: 4px;
+  background: transparent;
+  width: 16px;
+  height: 16px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+.theme-dark input[type="checkbox"]:checked {
+  background: #8B5CF6;
+  border-color: #8B5CF6;
+}
+.theme-dark .task-list-item.is-checked > * { color: #33334a; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   16. SIDEBAR — High contrast color system
+   Each folder = its own color zone. Files inside inherit the zone color.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Panel background */
+.theme-dark .workspace-leaf-content[data-type="file-explorer"],
+.theme-dark .workspace-leaf-content[data-type="search"],
+.theme-dark .workspace-leaf-content[data-type="backlink"],
+.theme-dark .workspace-leaf-content[data-type="outline"] {
+  background: #040409;
+}
+
+/* Vault root label */
+.theme-dark .nav-header {
+  border-bottom: 1px solid #1a1a2e;
+  padding: 8px 10px 8px;
+  margin-bottom: 6px;
+}
+
+/* Base item styles */
+.theme-dark .nav-folder-title,
+.theme-dark .nav-file-title {
+  border-radius: 5px;
+  padding: 4px 10px;
+  transition: background 0.1s, opacity 0.1s;
+  font-size: 0.84em;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* All file/folder text — dim by default, color overrides below */
+.theme-dark .nav-folder-title-content,
+.theme-dark .nav-file-title-content {
+  color: #38385a;
+  font-weight: 500;
+}
+
+/* Collapse arrow */
+.theme-dark .nav-folder-collapse-indicator {
+  color: #28284a;
+}
+
+/* Indentation guides — colored per-section via override below */
+.theme-dark .tree-item-children {
+  border-left: 1px solid #1a1a2e;
+  margin-left: 14px;
+  padding-left: 2px;
+}
+
+/* Active file highlight */
+.theme-dark .nav-file-title.is-active {
+  background: rgba(139, 92, 246, 0.12) !important;
+}
+.theme-dark .nav-file-title.is-active .nav-file-title-content {
+  color: #e0d8ff !important;
+  font-weight: 600 !important;
+}
+
+/* Hover — slight lift */
+.theme-dark .nav-file-title:hover .nav-file-title-content {
+  opacity: 1;
+}
+.theme-dark .nav-folder-title:hover .nav-folder-title-content {
+  opacity: 1;
+}
+
+/* ── CORE — Electric Blue ─────────────────────────────────────────────── */
+.nav-folder-title[data-path="Core"],
+.nav-folder-title[data-path="vault/Core"] {
+  background: rgba(0, 212, 255, 0.06) !important;
+  border-left: 3px solid #00d4ff !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Core"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Core"] .nav-folder-title-content {
+  color: #00d4ff !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder-title[data-path="Core"] .nav-folder-collapse-indicator,
+.nav-folder-title[data-path="vault/Core"] .nav-folder-collapse-indicator {
+  color: rgba(0, 212, 255, 0.5) !important;
+}
+/* Files inside Core */
+.nav-folder[data-path="Core"] .nav-file-title-content,
+.nav-folder[data-path="vault/Core"] .nav-file-title-content {
+  color: #67e8f9 !important;
+}
+.nav-folder[data-path="Core"] .tree-item-children,
+.nav-folder[data-path="vault/Core"] .tree-item-children {
+  border-left-color: rgba(0, 212, 255, 0.18) !important;
+}
+
+/* ── ARCHIVE — Violet ─────────────────────────────────────────────────── */
+.nav-folder-title[data-path="Archive"],
+.nav-folder-title[data-path="vault/Archive"] {
+  background: rgba(168, 85, 247, 0.07) !important;
+  border-left: 3px solid #a855f7 !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Archive"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Archive"] .nav-folder-title-content {
+  color: #c084fc !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder-title[data-path="Archive"] .nav-folder-collapse-indicator,
+.nav-folder-title[data-path="vault/Archive"] .nav-folder-collapse-indicator {
+  color: rgba(168, 85, 247, 0.5) !important;
+}
+.nav-folder[data-path="Archive"] .nav-file-title-content,
+.nav-folder[data-path="vault/Archive"] .nav-file-title-content {
+  color: #d8b4fe !important;
+}
+.nav-folder[data-path="Archive"] .tree-item-children,
+.nav-folder[data-path="vault/Archive"] .tree-item-children {
+  border-left-color: rgba(168, 85, 247, 0.18) !important;
+}
+
+/* ── KNOWLEDGE — Emerald ──────────────────────────────────────────────── */
+.nav-folder-title[data-path="Knowledge"],
+.nav-folder-title[data-path="vault/Knowledge"] {
+  background: rgba(74, 222, 128, 0.06) !important;
+  border-left: 3px solid #4ade80 !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Knowledge"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Knowledge"] .nav-folder-title-content {
+  color: #4ade80 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder-title[data-path="Knowledge"] .nav-folder-collapse-indicator,
+.nav-folder-title[data-path="vault/Knowledge"] .nav-folder-collapse-indicator {
+  color: rgba(74, 222, 128, 0.5) !important;
+}
+.nav-folder[data-path="Knowledge"] .nav-file-title-content,
+.nav-folder[data-path="vault/Knowledge"] .nav-file-title-content {
+  color: #86efac !important;
+}
+.nav-folder[data-path="Knowledge"] .tree-item-children,
+.nav-folder[data-path="vault/Knowledge"] .tree-item-children {
+  border-left-color: rgba(74, 222, 128, 0.18) !important;
+}
+
+/* ── SKILLS — Cyan ────────────────────────────────────────────────────── */
+.nav-folder-title[data-path="Skills"],
+.nav-folder-title[data-path="vault/Skills"] {
+  background: rgba(34, 211, 238, 0.06) !important;
+  border-left: 3px solid #22d3ee !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Skills"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Skills"] .nav-folder-title-content {
+  color: #22d3ee !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder-title[data-path="Skills"] .nav-folder-collapse-indicator,
+.nav-folder-title[data-path="vault/Skills"] .nav-folder-collapse-indicator {
+  color: rgba(34, 211, 238, 0.5) !important;
+}
+.nav-folder[data-path="Skills"] .nav-file-title-content,
+.nav-folder[data-path="vault/Skills"] .nav-file-title-content {
+  color: #67e8f9 !important;
+}
+.nav-folder[data-path="Skills"] .tree-item-children,
+.nav-folder[data-path="vault/Skills"] .tree-item-children {
+  border-left-color: rgba(34, 211, 238, 0.18) !important;
+}
+
+/* ── MIGRATION — Amber ────────────────────────────────────────────────── */
+.nav-folder-title[data-path="Migration"],
+.nav-folder-title[data-path="vault/Migration"] {
+  background: rgba(245, 158, 11, 0.06) !important;
+  border-left: 3px solid #f59e0b !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Migration"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Migration"] .nav-folder-title-content {
+  color: #f59e0b !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder-title[data-path="Migration"] .nav-folder-collapse-indicator,
+.nav-folder-title[data-path="vault/Migration"] .nav-folder-collapse-indicator {
+  color: rgba(245, 158, 11, 0.5) !important;
+}
+.nav-folder[data-path="Migration"] .nav-file-title-content,
+.nav-folder[data-path="vault/Migration"] .nav-file-title-content {
+  color: #fcd34d !important;
+}
+.nav-folder[data-path="Migration"] .tree-item-children,
+.nav-folder[data-path="vault/Migration"] .tree-item-children {
+  border-left-color: rgba(245, 158, 11, 0.18) !important;
+}
+
+/* ── TEMPLATES — Slate ────────────────────────────────────────────────── */
+.nav-folder-title[data-path="Templates"],
+.nav-folder-title[data-path="vault/Templates"] {
+  background: rgba(100, 116, 139, 0.06) !important;
+  border-left: 3px solid #64748b !important;
+  border-radius: 0 5px 5px 0 !important;
+  margin-bottom: 2px;
+}
+.nav-folder-title[data-path="Templates"] .nav-folder-title-content,
+.nav-folder-title[data-path="vault/Templates"] .nav-folder-title-content {
+  color: #94a3b8 !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  font-size: 0.8em !important;
+}
+.nav-folder[data-path="Templates"] .nav-file-title-content,
+.nav-folder[data-path="vault/Templates"] .nav-file-title-content {
+  color: #cbd5e1 !important;
+}
+
+/* ── ROOT FILES ───────────────────────────────────────────────────────── */
+
+/* HOME — Purple gradient glow */
+.nav-file-title[data-path="HOME.md"],
+.nav-file-title[data-path="vault/HOME.md"] {
+  background: rgba(139, 92, 246, 0.1) !important;
+  border: 1px solid rgba(139, 92, 246, 0.2) !important;
+  border-radius: 6px !important;
+  margin-bottom: 3px !important;
+}
+.nav-file-title[data-path="HOME.md"] .nav-file-title-content,
+.nav-file-title[data-path="vault/HOME.md"] .nav-file-title-content {
+  color: #c4b5fd !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* ARCHITECTURE — Pink */
+.nav-file-title[data-path="ARCHITECTURE.canvas"] .nav-file-title-content,
+.nav-file-title[data-path="vault/ARCHITECTURE.canvas"] .nav-file-title-content {
+  color: #f472b6 !important;
+  font-weight: 600 !important;
+}
+
+/* DASHBOARD — Cyan */
+.nav-file-title[data-path="DASHBOARD.md"] .nav-file-title-content,
+.nav-file-title[data-path="vault/DASHBOARD.md"] .nav-file-title-content {
+  color: #67e8f9 !important;
+  font-weight: 600 !important;
+}
+
+/* Hide .example files */
+.nav-file-title[data-path$=".example"] {
+  display: none !important;
+}
+
+/* ── 17. TAB BAR ──────────────────────────────────────────────────────── */
+.theme-dark .workspace-tab-header-container {
+  background: var(--background-secondary);
+  border-bottom: 1px solid #141428;
+  padding: 0 4px;
+}
+
+.theme-dark .workspace-tab-header {
+  border-radius: 7px 7px 0 0;
+  margin-top: 4px;
+  transition: background 0.15s;
+}
+
+.theme-dark .workspace-tab-header.is-active {
+  background: var(--background-primary);
+  border-top: 2px solid var(--cc-purple);
+  border-left: 1px solid #1e1e38;
+  border-right: 1px solid #1e1e38;
+}
+
+.theme-dark .workspace-tab-header-inner-title {
+  font-size: 0.82em;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* ── 18. RIBBON ───────────────────────────────────────────────────────── */
+.theme-dark .side-dock-ribbon {
+  background: var(--background-secondary);
+  border-right: 1px solid #141428;
+  padding: 6px 0;
+}
+
+.theme-dark .side-dock-ribbon-action {
+  color: #2a2a50;
+  border-radius: 8px;
+  margin: 2px 5px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.theme-dark .side-dock-ribbon-action:hover {
+  color: var(--cc-purple);
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.theme-dark .side-dock-ribbon-action.is-active {
+  color: var(--cc-purple-mid);
+}
+
+/* ── 19. COMMAND PALETTE ──────────────────────────────────────────────── */
+.theme-dark .prompt {
+  background: #08081c;
+  border: 1px solid #1e1e3a;
+  border-radius: 14px;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(139, 92, 246, 0.1);
+  overflow: hidden;
+}
+
+.theme-dark .prompt-input-container {
+  border-bottom: 1px solid #141428;
+  padding: 12px 16px;
+}
+
+.theme-dark .prompt-input {
+  background: transparent;
+  border: none;
+  color: #e0e0f4;
+  font-size: 0.95em;
+  font-family: var(--font-text);
+}
+
+.theme-dark .suggestion-item {
+  border-radius: 6px;
+  margin: 1px 6px;
+  font-size: 0.88em;
+  transition: background 0.1s;
+}
+
+.theme-dark .suggestion-item.is-selected {
+  background: rgba(139, 92, 246, 0.12);
+  border-left: 2px solid var(--cc-purple);
+}
+
+.theme-dark .suggestion-hotkey {
+  color: #44447a;
+  font-family: var(--font-monospace);
+  font-size: 0.78em;
+}
+
+/* ── 20. MODAL ────────────────────────────────────────────────────────── */
+.theme-dark .modal-container .modal {
+  background: #08081c;
+  border: 1px solid #1e1e3a;
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7),
+              0 0 0 1px rgba(139, 92, 246, 0.08);
+}
+
+.theme-dark .modal-title {
+  font-weight: 800;
+  font-size: 1.1em;
+  color: #e0e0f4;
+}
+
+/* ── 21. STATUS BAR ───────────────────────────────────────────────────── */
+.theme-dark .status-bar {
+  background: #050510;
+  border-top: 1px solid #141428;
+  font-size: 0.73em;
+  font-family: var(--font-monospace);
+  letter-spacing: 0.02em;
+  padding: 0 12px;
+}
+
+.theme-dark .status-bar-item {
+  color: #2a2a50;
+  transition: color 0.15s;
+}
+
+.theme-dark .status-bar-item:hover { color: #6666a0; }
+
+/* ── 22. HOVER PREVIEW / POPOVER ──────────────────────────────────────── */
+.theme-dark .popover.hover-popover {
+  background: #09091e;
+  border: 1px solid #1e1e3a;
+  border-radius: 10px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65),
+              0 0 0 1px rgba(139, 92, 246, 0.08);
+}
+
+/* ── 23. EMBEDS ───────────────────────────────────────────────────────── */
+.theme-dark .markdown-embed {
+  border: 1px solid #141428;
+  border-left: 3px solid rgba(139, 92, 246, 0.35);
+  border-radius: 0 8px 8px 0;
+  background: rgba(7, 7, 15, 0.85);
+  padding: 4px 0;
+}
+
+/* ── 24. PROPERTIES / FRONTMATTER ─────────────────────────────────────── */
+.theme-dark .metadata-container {
+  background: rgba(7, 7, 22, 0.8);
+  border: 1px solid #141428;
+  border-radius: 8px;
+  margin-bottom: 1.5em;
+  padding: 10px 14px;
+}
+
+.theme-dark .metadata-property-key {
+  color: #44447a;
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-family: var(--font-monospace);
+}
+
+.theme-dark .metadata-property-value {
+  color: #9090c0;
+  font-size: 0.88em;
+}
+
+/* ── 25. SEARCH HIGHLIGHTS ────────────────────────────────────────────── */
+.theme-dark .search-highlight {
+  background: rgba(139, 92, 246, 0.28);
+  color: #e0e0ff;
+  border-radius: 3px;
+}
+
+.theme-dark .search-result-file-title {
+  color: var(--cc-purple-mid);
+  font-weight: 700;
+  font-size: 0.88em;
+}
+
+/* ── 26. NOTE BANNERS (cssclasses) ────────────────────────────────────── */
+
+/* Add cssclasses: [banner-core] etc. to frontmatter */
+.markdown-preview-view.banner-core     { border-top: 3px solid var(--cc-core); }
+.markdown-preview-view.banner-archive  { border-top: 3px solid var(--cc-archive); }
+.markdown-preview-view.banner-knowledge{ border-top: 3px solid var(--cc-knowledge); }
+.markdown-preview-view.banner-skills   { border-top: 3px solid var(--cc-skills); }
+.markdown-preview-view.banner-trading  { border-top: 3px solid var(--cc-amber); }
+.markdown-preview-view.banner-soul     { border-top: 3px solid var(--cc-purple); }
+
+/* ── 27. GRAPH VIEW HINTS ─────────────────────────────────────────────── */
+.theme-dark .graph-view.color-fill           { color: #8B5CF6; }
+.theme-dark .graph-view.color-fill-unresolved{ color: #1e1e3a; }
+.theme-dark .graph-view.color-fill-focused   { color: #00d4ff; }
+.theme-dark .graph-view.color-fill-tag       { color: #4ade80; }
+.theme-dark .graph-view.color-fill-attachment{ color: #f59e0b; }
+.theme-dark .graph-view.color-line           { color: #1a1a30; }
+.theme-dark .graph-view.color-text           { color: #6666a0; }
+.theme-dark .graph-view.color-fill-highlight { color: #c4b5fd; }
+.theme-dark .graph-view.color-line-highlight { color: #8B5CF6; }
+.theme-dark .graph-view.color-arrow          { color: #8B5CF6; }
+
+/* ── 28. SCROLLBARS ───────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #26263c;
+  background: #181830;
   border-radius: 4px;
+  transition: background 0.2s;
 }
 ::-webkit-scrollbar-thumb:hover { background: #8B5CF6; }
 
-/* ── Selection ───────────────────────────────────────────────── */
+/* ── 29. SELECTION ────────────────────────────────────────────────────── */
 .theme-dark ::selection {
-  background: rgba(139, 92, 246, 0.25);
+  background: rgba(139, 92, 246, 0.3);
+  color: #ffffff;
 }
+
+/* ── 30. HOME HERO (cssclasses: cc-home) ─────────────────────────────── */
+.markdown-preview-view.cc-home h1 {
+  font-size: 3em;
+  font-weight: 900;
+  background: linear-gradient(120deg, #f0e8ff 0%, #c4b5fd 35%, #8B5CF6 65%, #00d4ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.05em;
+  border: none;
+  margin-bottom: 0.15em;
+  filter: drop-shadow(0 0 30px rgba(139, 92, 246, 0.5));
+}
+
+.markdown-preview-view.cc-home h1::before { content: none; }
+
+.markdown-preview-view.cc-home h2 {
+  color: #a78bfa;
+  border-bottom: 1px solid #141428;
+  padding-bottom: 0.3em;
+  text-shadow: 0 0 16px rgba(139, 92, 246, 0.25);
+}
+
+.markdown-preview-view.cc-home h2::before { content: none; }
