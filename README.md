@@ -202,30 +202,26 @@ The three Core files are your foundation. Fill them in once and every AI session
 
 ## Bootstrap — Surviving Compaction
 
-Every AI provider compacts long conversations. When that happens, the AI forgets everything — your project, your preferences, your active work. This is the problem Command Center was built to solve.
-
-**The bootstrap tool recovers full context in one call:**
+The bootstrap tool reads your vault state and returns a full recovery packet in one call:
 
 ```
 bootstrap_agent(reason="session_start")
 ```
 
-The engine reads your Core files (USER, SOUL, COMPANY-SOUL), your active session handoff, and your working set — then returns a single recovery packet the AI uses to resume as if the conversation never compacted.
+The engine reads your Core identity files, your active session handoff, and your working set — then hands the AI everything it needs to resume as if the conversation never compacted.
 
-**To wire it up for automatic recovery:**
+**Automatic wiring** — `setup-ai` writes `CLAUDE.md` into your project, which Claude Code reads at startup and uses to call bootstrap automatically. For other runtimes, add this to your system prompt or session opener:
 
-```bash
-# Claude Code — add to your project's .claude/settings.json
-# "hooks": { "PreToolUse": [{ "matcher": "", "hooks": [...] }] }
-# See vault/Skills/bootstrap-agent.md for full setup
+```
+At the start of every session: call bootstrap_agent(reason="session_start") before anything else.
 ```
 
-The three operating state files that bootstrap reads:
+The three state files bootstrap reads — updated by your AI throughout each session:
 - `vault/Core/SESSION_HANDOFF.md` — what was just done, what comes next
 - `vault/Core/ACTIVE_CONTEXT.md` — current working set and project state
 - `vault/Core/FRESHNESS.md` — timestamp snapshot of when each file was last updated
 
-Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agent` at the start of the next one. Compaction becomes a non-event.
+Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agent` at the start of the next one.
 
 ---
 
@@ -265,6 +261,10 @@ The repo ships a complete `.obsidian/` config inside `vault/` with everything pr
 ## Screenshots
 
 <div align="center">
+
+![Command Center — Dashboard + Graph View](assets/screenshots/command-center-dual.png)
+
+*HOME.md dashboard alongside the live knowledge graph — your memory growing in real time.*
 
 | Dashboard (HOME.md) | Knowledge Graph |
 |---|---|
