@@ -10,51 +10,43 @@ cssclasses:
 
 # Command Center
 
-**Eternal memory for any AI — local, private, portable.**
+**Your AI's memory — local, private, eternal.**
 
 </div>
+
+> [!tip] First time here?
+> Fill in the three files under **Identity** below. Every AI session loads them automatically. That's the whole setup.
 
 ---
 
 ## Identity
 
 > [!identity] Core Configuration
-> Fill these three files once. Every AI session loads them automatically — full context, zero re-explaining.
+> These three files are what your AI reads at the start of every session. Fill them in once — full context, zero re-explaining, forever.
 >
-> **[[Core/USER|USER]]** — Who you are: background, preferences, goals, tech stack
-> **[[Core/SOUL|SOUL]]** — AI behavior rules: tone, directives, what to always and never do
-> **[[Core/COMPANY-SOUL|COMPANY SOUL]]** — Organization mission, active projects, team context
-
----
-
-## Operating State
-
-> [!state] Eternal Context Engine
-> These files are the enforced working set for startup and post-compact recovery.
->
-> **[[Core/ACTIVE_CONTEXT|ACTIVE CONTEXT]]** — current mission, priorities, constraints, next actions
-> **[[Core/SESSION_HANDOFF|SESSION HANDOFF]]** — latest durable checkpoint between sessions
-> **[[Core/FRESHNESS|FRESHNESS]]** — stale-file detector for the core operating files
+> **[[Core/USER|USER]]** — Who you are: background, preferences, tech stack, how you like to work
+> **[[Core/SOUL|SOUL]]** — AI behavior rules: tone, what to always do, what to never do
+> **[[Core/COMPANY-SOUL|COMPANY SOUL]]** — Your project or organization: mission, active work, context
 
 ---
 
 ## Memory
 
 > [!memory] Long-Term Memory
-> Permanent facts, decisions, and directives — never auto-deleted.
+> Permanent facts, decisions, and directives — never auto-deleted. Your AI writes here when you say "remember this" or "from now on".
 >
 > ```dataview
-> TABLE WITHOUT ID file.link AS "File", dateformat(file.mtime, "yyyy-MM-dd HH:mm") AS "Last Updated", file.size AS "Bytes"
+> TABLE WITHOUT ID file.link AS "File", dateformat(file.mtime, "yyyy-MM-dd HH:mm") AS "Last Updated"
 > FROM "Archive" AND !"Archive/short"
 > WHERE file.name != ".gitkeep"
 > SORT file.mtime DESC
 > ```
 
 > [!session]- Active Sessions (30-day TTL)
-> Short-term memory — tasks in progress, recent backtests, current sprint state.
+> Short-term memory — tasks in progress, project state, current sprint context. Auto-expires after 30 days.
 >
 > ```dataview
-> TABLE WITHOUT ID file.link AS "Session", dateformat(file.mtime, "yyyy-MM-dd") AS "Date", file.size AS "Bytes"
+> TABLE WITHOUT ID file.link AS "Session", dateformat(file.mtime, "yyyy-MM-dd") AS "Date"
 > FROM "Archive/short"
 > WHERE file.name != ".gitkeep"
 > SORT file.mtime DESC
@@ -62,7 +54,7 @@ cssclasses:
 > ```
 
 > [!cache]- Cache (clears nightly)
-> Session noise — greetings, one-off questions, ephemeral context.
+> Session noise — greetings, one-off questions, ephemeral context. Purged automatically every night.
 >
 > ```dataview
 > LIST FROM "Cache"
@@ -75,7 +67,7 @@ cssclasses:
 ## Knowledge Base
 
 > [!knowledge] Your Notes
-> Domain knowledge, research, strategies, references — always semantically searchable by any connected AI.
+> Domain knowledge, research, strategies, references. Always semantically searchable by any connected AI — just drop a Markdown file in `Knowledge/`.
 >
 > ```dataview
 > TABLE WITHOUT ID file.link AS "Note", dateformat(file.mtime, "yyyy-MM-dd") AS "Updated"
@@ -86,29 +78,13 @@ cssclasses:
 
 ---
 
-## System
-
-> [!engine] Engine Status
-> | | |
-> |---|---|
-> | **API** | `http://localhost:8765` |
-> | **Start** | `python engine/omniscience.py start` |
-> | **Stop** | `python engine/omniscience.py stop` |
-> | **Status** | `python engine/omniscience.py status` |
-> | **Health** | `python engine/omniscience.py doctor` |
-> | **Logs** | `python engine/omniscience.py logs` |
->
-> MCP connection configured in `~/.claude/settings.json` (Claude Code) or `claude_desktop_config.json` (Claude Desktop).
-
----
-
 ## Skills
 
 > [!skills] Available to Any Connected AI
-> Every AI connected via MCP or REST can use these capabilities. Add a file to `Skills/` to register a new skill — it appears here automatically.
+> Skills are prompt libraries — playbooks, best practices, domain knowledge — that any AI can load on demand. Add a `.md` file to `Skills/` and it appears here automatically.
 >
 > ```dataview
-> TABLE WITHOUT ID file.link AS "Skill", trigger AS "Trigger", description AS "What it does", category AS "Category"
+> TABLE WITHOUT ID file.link AS "Skill", trigger AS "Trigger", description AS "What it does"
 > FROM "Skills"
 > WHERE type = "skill"
 > SORT category ASC, file.name ASC
@@ -116,8 +92,24 @@ cssclasses:
 
 ---
 
+## Engine
+
+> [!engine] Engine Status
+> | | |
+> |---|---|
+> | **API** | `http://localhost:8765` |
+> | **Start** | `python engine/omniscience.py start` |
+> | **Status** | `python engine/omniscience.py status` |
+> | **Health** | `python engine/omniscience.py doctor` |
+> | **Logs** | `python engine/omniscience.py logs` |
+> | **Sync Skills** | `python engine/omniscience.py sync-skills` |
+>
+> Connect via MCP — see `README.md` for config snippets for Claude Code, Claude Desktop, Cursor, and Zed.
+
+---
+
 > [!tip] How Memory Flows
-> Your AI calls `store("content")` → **Memory Classifier** reads it → routes to the right tier automatically.
+> Your AI calls `store("content")` → engine classifier reads it → routes to the right tier automatically.
 > No manual classification. No configuration. It just works.
 >
 > See [[ARCHITECTURE]] to visualize the full system.
