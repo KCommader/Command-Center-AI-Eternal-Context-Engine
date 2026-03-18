@@ -21,6 +21,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from context_state import ensure_state_files, refresh_freshness_report
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME_DIR = ROOT / ".omniscience"
@@ -154,10 +155,19 @@ def main() -> int:
     # 4. Expire old short-term memory files
     expire_short_term(vault, ttl_days=args.short_term_ttl)
 
+    # 5. Refresh operating-state files and the freshness snapshot
+    ensure_state_files(vault)
+    freshness = refresh_freshness_report(vault, stale_days=args.short_term_ttl, write=True)
+    _log(
+        "freshness: "
+        f"fresh={freshness['counts']['fresh']} "
+        f"stale={freshness['counts']['stale']} "
+        f"missing={freshness['counts']['missing']}"
+    )
+
     _log(f"nightly: done doctor_rc={doctor_rc} cleanup_ok={cleanup_ok}")
     return 0 if doctor_rc == 0 else 1
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

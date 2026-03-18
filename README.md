@@ -99,6 +99,23 @@ Once connected, the AI gets these tools automatically:
 - `store` — save facts/decisions (engine auto-classifies into the right memory tier)
 - `read_vault_file` — read any vault document
 - `list_vault` — browse available notes
+- `list_skills` — browse the cross-AI Commander skill catalog
+- `read_skill` — load one skill from the registry
+- `resolve_skills` — recommend the right skills for a task or runtime
+- `bootstrap_agent` — generate a standard startup or post-compact recovery packet
+- `update_working_set` — set the canonical active mission, priorities, and next actions
+- `record_handoff` — write the latest durable session handoff
+- `verify_vault_file` — mark a vault file as freshly verified
+- `freshness_report` — detect stale or missing operating files
+
+By default, Command Center aggregates skills from:
+- `vault/Skills/`
+- `~/.claude/skills/`
+
+You can add more skill roots for any runtime with:
+```bash
+export OMNI_SKILL_PATHS="/path/to/more/skills:/another/skill/root"
+```
 
 ### Option B — Network MCP via Streamable HTTP (NAS / Multi-Machine)
 
@@ -153,13 +170,38 @@ vault/
 ├── Core/
 │   ├── USER.md          ← Who you are (fill this in)
 │   ├── SOUL.md          ← AI identity & behavior rules (fill this in)
-│   └── COMPANY-SOUL.md  ← Organization/project mission (fill this in)
+│   ├── COMPANY-SOUL.md  ← Organization/project mission (fill this in)
+│   ├── ACTIVE_CONTEXT.md   ← Current mission, priorities, constraints
+│   ├── SESSION_HANDOFF.md  ← Latest durable handoff between sessions
+│   └── FRESHNESS.md        ← Freshness report for core operating files
 ├── Knowledge/           ← Your domain notes (strategies, docs, research)
 └── Archive/
     └── MEMORY.md        ← Auto-captured facts and decisions
 ```
 
 The three Core files are your foundation. Fill them in once and every AI session starts with full context.
+
+## Operating State
+
+Command Center now has a dedicated operating-state layer so compaction does not force the AI back to generic priors.
+
+- `Core/ACTIVE_CONTEXT.md` is the canonical working set
+- `Core/SESSION_HANDOFF.md` is the latest session transfer
+- `Core/FRESHNESS.md` tracks whether the key files are stale or missing
+
+The intended boot order is:
+
+1. `bootstrap_agent(agent="...")`
+2. Read `SOUL`, `USER`, `COMPANY-SOUL`
+3. Read `ACTIVE_CONTEXT`, `SESSION_HANDOFF`, `FRESHNESS`
+4. Run the recommended memory search
+5. Load the recommended skills
+
+After any major decision or live change:
+
+- update `ACTIVE_CONTEXT` with `update_working_set`
+- write a durable checkpoint with `record_handoff`
+- mark files current with `verify_vault_file`
 
 ---
 
@@ -247,6 +289,8 @@ What it does:
 - **Admin cleanup** — calls engine's `/admin/cleanup` endpoint if engine is running
 - **Cache purge** — deletes all files in `vault/Cache/` (session noise, not worth keeping)
 - **Short-term expiry** — removes files in `vault/Archive/short/` older than 30 days (configurable via `--short-term-ttl`)
+- **State bootstrap** — ensures the operating-state files exist
+- **Freshness snapshot** — regenerates `vault/Core/FRESHNESS.md`
 - Logs everything to `.omniscience/nightly.log`
 
 ---

@@ -68,22 +68,37 @@ import json
 import os
 import sys
 import asyncio
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
 sys.path.insert(0, str(Path(__file__).parent))
 from memory_classifier import classify, write_to_tier, MemoryTier
+from context_state import (
+    ACTIVE_CONTEXT_PATH,
+    FRESHNESS_PATH,
+    SESSION_HANDOFF_PATH,
+    ensure_state_files,
+    read_handoff,
+    read_working_set,
+    record_handoff as write_session_handoff,
+    refresh_freshness_report,
+    update_working_set as write_working_set,
+    verify_vault_file as mark_vault_file_verified,
+)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "command-center"
-SERVER_VERSION = "1.2.0"
+SERVER_VERSION = "1.4.0"
 
 ENGINE_URL = os.environ.get("OMNI_ENGINE_URL", "http://127.0.0.1:8765")
 ENGINE_API_KEY = os.environ.get("OMNI_API_KEY", "")
 VAULT_PATH = Path(os.environ.get("OMNI_VAULT_PATH", Path(__file__).parent.parent / "vault"))
+SKILL_PATHS_ENV = os.environ.get("OMNI_SKILL_PATHS", "")
 
 # Bearer token protecting the HTTP MCP endpoint (separate from the engine key)
 MCP_KEY = os.environ.get("OMNI_MCP_KEY", "")
@@ -201,6 +216,219 @@ TOOLS = [
             },
             "required": ["export_path"]
         }
+    },
+    {
+        "name": "list_skills",
+        "description": (
+            "List the cross-AI skill catalog aggregated by Command Center. "
+            "This includes native vault skills plus external libraries such as ~/.claude/skills."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Optional free-text filter for skill name or description",
+                    "default": ""
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional skill source filter (e.g. 'vault', 'claude')",
+                    "default": ""
+                },
+                "category": {
+                    "type": "string",
+                    "description": "Optional category filter",
+                    "default": ""
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Optional target/domain hint (e.g. 'flutter', 'react', 'trading')",
+                    "default": ""
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of skills to return (default: 25, max: 100)",
+                    "default": 25
+                }
+            }
+        }
+    },
+    {
+        "name": "read_skill",
+        "description": (
+            "Read the full contents of one registered skill. "
+            "Use after list_skills or resolve_skills to load the exact skill instructions."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "skill_id": {
+                    "type": "string",
+                    "description": "Canonical skill id (for example 'claude:elite-landing-page')"
+                },
+                "source": {
+                    "type": "string",
+                    "description": "Optional source override when looking up by name",
+                    "default": ""
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Optional skill name when skill_id is not known yet",
+                    "default": ""
+                }
+            }
+        }
+    },
+    {
+        "name": "resolve_skills",
+        "description": (
+            "Recommend the most relevant skills for a task, agent, or target stack. "
+            "Use this to map Commander skill knowledge onto any AI runtime."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "Task description or user request"
+                },
+                "agent": {
+                    "type": "string",
+                    "description": "Optional agent/client name (e.g. 'Custom AI', 'Codex', 'Claude')",
+                    "default": ""
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Optional delivery target (e.g. 'frontend', 'flutter', '3d', 'trading')",
+                    "default": ""
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of matches to return (default: 8, max: 20)",
+                    "default": 8
+                }
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "bootstrap_agent",
+        "description": (
+            "Generate a Command Center startup packet for an AI agent. "
+            "Returns the core resources to load, the first search to run, the active working set, "
+            "and the skills to read. Use this at startup and after compaction."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "Agent or runtime name (e.g. 'Custom AI', 'Claude', 'Codex')"
+                },
+                "task": {
+                    "type": "string",
+                    "description": "Optional active task to tailor the bootstrap packet",
+                    "default": ""
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Optional domain target (e.g. 'frontend', 'flutter', '3d', 'trading')",
+                    "default": ""
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Why the bootstrap is being requested (e.g. 'startup', 'compact_recovery', 'handoff')",
+                    "default": "startup"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum recommended skills to include (default: 6, max: 12)",
+                    "default": 6
+                }
+            },
+            "required": ["agent"]
+        }
+    },
+    {
+        "name": "update_working_set",
+        "description": (
+            "Update the canonical active working set. "
+            "Use this after major strategy changes, live incidents, or priority shifts so every agent reloads the same state."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project": {"type": "string", "description": "Active project name", "default": ""},
+                "mission": {"type": "string", "description": "Current mission statement", "default": ""},
+                "summary": {"type": "string", "description": "Current state summary", "default": ""},
+                "priorities": {"type": "array", "items": {"type": "string"}, "description": "Ordered current priorities"},
+                "constraints": {"type": "array", "items": {"type": "string"}, "description": "Constraints or guardrails"},
+                "open_questions": {"type": "array", "items": {"type": "string"}, "description": "Open questions or unresolved decisions"},
+                "next_actions": {"type": "array", "items": {"type": "string"}, "description": "Immediate next actions"},
+                "files": {"type": "array", "items": {"type": "string"}, "description": "Relevant file paths or systems"},
+                "source": {"type": "string", "description": "Who updated the working set", "default": "agent"}
+            }
+        }
+    },
+    {
+        "name": "record_handoff",
+        "description": (
+            "Write the latest session handoff snapshot. "
+            "Use this before ending a session or after completing a meaningful chunk of work."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "summary": {"type": "string", "description": "Durable handoff summary"},
+                "next_actions": {"type": "array", "items": {"type": "string"}, "description": "What should happen next"},
+                "changed_files": {"type": "array", "items": {"type": "string"}, "description": "Changed files or systems"},
+                "open_questions": {"type": "array", "items": {"type": "string"}, "description": "Open questions that remain"},
+                "risks": {"type": "array", "items": {"type": "string"}, "description": "Live risks or caveats"},
+                "source": {"type": "string", "description": "Who wrote the handoff", "default": "agent"}
+            },
+            "required": ["summary"]
+        }
+    },
+    {
+        "name": "verify_vault_file",
+        "description": (
+            "Mark a vault file as freshly verified and attach freshness metadata. "
+            "Use this when you confirm a file is current so stale state can be detected later."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Relative path within the vault"},
+                "status": {"type": "string", "description": "Declared file status (e.g. 'active', 'deprecated')", "default": "active"},
+                "note": {"type": "string", "description": "Optional verification note", "default": ""},
+                "review_after_days": {"type": "integer", "description": "Days before this file should be reviewed again"},
+                "source": {"type": "string", "description": "Who verified the file", "default": "agent"}
+            },
+            "required": ["path"]
+        }
+    },
+    {
+        "name": "freshness_report",
+        "description": (
+            "Generate or read the freshness report for the core operating files. "
+            "Use this to catch stale identity docs, handoffs, or working state before they drift."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "stale_days": {
+                    "type": "integer",
+                    "description": "Default review window in days when a file has no explicit metadata",
+                    "default": 7
+                },
+                "write": {
+                    "type": "boolean",
+                    "description": "Whether to persist the refreshed report to Core/FRESHNESS.md",
+                    "default": True
+                }
+            }
+        }
     }
 ]
 
@@ -230,6 +458,24 @@ RESOURCES = [
         "name": "Long-Term Memory",
         "description": "Permanent preferences, decisions, and context accumulated over time.",
         "mimeType": "text/markdown"
+    },
+    {
+        "uri": "vault://core/active-context",
+        "name": "Active Context",
+        "description": "Current mission, priorities, and constraints. Load on startup and after compaction.",
+        "mimeType": "text/markdown"
+    },
+    {
+        "uri": "vault://core/session-handoff",
+        "name": "Session Handoff",
+        "description": "Latest durable session summary, next actions, and risks.",
+        "mimeType": "text/markdown"
+    },
+    {
+        "uri": "vault://core/freshness",
+        "name": "Freshness Report",
+        "description": "Freshness status for the critical operating files.",
+        "mimeType": "text/markdown"
     }
 ]
 
@@ -238,9 +484,242 @@ RESOURCE_FILE_MAP = {
     "vault://core/user": "Core/USER.md",
     "vault://core/company-soul": "Core/COMPANY-SOUL.md",
     "vault://archive/memory": "Archive/MEMORY.md",
+    "vault://core/active-context": ACTIVE_CONTEXT_PATH,
+    "vault://core/session-handoff": SESSION_HANDOFF_PATH,
+    "vault://core/freshness": FRESHNESS_PATH,
 }
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+SKILL_EXCLUDE_DIRS = {"assets", "scripts", "references", "eval-viewer", "__pycache__"}
+META_TOOL_TRIGGERS = {
+    "search_memory",
+    "store",
+    "read_vault_file",
+    "list_vault",
+    "migrate_history",
+    "list_skills",
+    "read_skill",
+    "resolve_skills",
+    "bootstrap_agent",
+    "update_working_set",
+    "record_handoff",
+    "verify_vault_file",
+    "freshness_report",
+}
+STOPWORDS = {
+    "a", "an", "and", "any", "app", "apps", "as", "at", "be", "bot", "build", "for",
+    "from", "how", "i", "in", "into", "is", "it", "make", "me", "need", "of", "on",
+    "or", "our", "project", "session", "so", "that", "the", "this", "to", "use",
+    "want", "we", "with", "you", "your",
+}
+
+
+@dataclass
+class SkillRecord:
+    skill_id: str
+    name: str
+    description: str
+    source: str
+    path: Path
+    relative_path: str
+    category: str
+    trigger: str
+    targets: list[str]
+    body: str
+
+
+def _slugify(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def _split_path_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(os.pathsep) if item.strip()]
+
+
+def _parse_listish(value: str) -> list[str]:
+    if not value:
+        return []
+    text = value.strip()
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return [
+        item.strip().strip("\"'")
+        for item in text.split(",")
+        if item.strip()
+    ]
+
+
+def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}, text
+
+    metadata: dict[str, str] = {}
+    for i in range(1, len(lines)):
+        line = lines[i]
+        if line.strip() == "---":
+            body = "\n".join(lines[i + 1:]).lstrip()
+            return metadata, body
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        metadata[key.strip()] = value.strip()
+
+    return {}, text
+
+
+def _skill_roots() -> list[tuple[str, Path]]:
+    roots: list[tuple[str, Path]] = [
+        ("vault", VAULT_PATH / "Skills"),
+        ("claude", Path.home() / ".claude" / "skills"),
+    ]
+    for idx, raw in enumerate(_split_path_list(SKILL_PATHS_ENV), 1):
+        roots.append((f"external{idx}", Path(raw).expanduser()))
+
+    deduped: list[tuple[str, Path]] = []
+    seen: set[str] = set()
+    for source, root in roots:
+        try:
+            resolved = str(root.expanduser().resolve())
+        except FileNotFoundError:
+            resolved = str(root.expanduser())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append((source, root.expanduser()))
+    return deduped
+
+
+def _is_skill_candidate(path: Path, metadata: dict[str, str]) -> bool:
+    if path.suffix.lower() != ".md":
+        return False
+    if any(part in SKILL_EXCLUDE_DIRS for part in path.parts):
+        return False
+    if metadata.get("type", "").lower() == "skill":
+        return True
+    return bool(metadata.get("name") and metadata.get("description"))
+
+
+def _discover_skills() -> list[SkillRecord]:
+    records: list[SkillRecord] = []
+
+    for source, root in _skill_roots():
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.md")):
+            try:
+                relative = str(path.relative_to(root))
+            except ValueError:
+                relative = path.name
+            if any(part in SKILL_EXCLUDE_DIRS for part in Path(relative).parts[:-1]):
+                continue
+
+            try:
+                text = path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            metadata, body = _parse_frontmatter(text)
+            if not _is_skill_candidate(path, metadata):
+                continue
+
+            name = metadata.get("name", path.stem)
+            slug = metadata.get("skill_id", _slugify(name))
+            description = metadata.get("description", "").strip()
+            category = metadata.get("category", "knowledge").strip() or "knowledge"
+            trigger = metadata.get("trigger", "").strip()
+            targets = [item.lower() for item in _parse_listish(metadata.get("targets", ""))]
+
+            records.append(
+                SkillRecord(
+                    skill_id=f"{source}:{slug}",
+                    name=name,
+                    description=description,
+                    source=source,
+                    path=path,
+                    relative_path=relative,
+                    category=category,
+                    trigger=trigger,
+                    targets=targets,
+                    body=body,
+                )
+            )
+
+    return records
+
+
+def _find_skill(skill_id: str = "", name: str = "", source: str = "") -> SkillRecord | None:
+    source = source.strip().lower()
+    name = name.strip().lower()
+    skill_id = skill_id.strip().lower()
+
+    for skill in _discover_skills():
+        if skill_id and skill.skill_id.lower() == skill_id:
+            return skill
+        if name and skill.name.lower() == name and (not source or skill.source == source):
+            return skill
+    return None
+
+
+def _tokenize(text: str) -> list[str]:
+    return [
+        token for token in re.findall(r"[a-z0-9][a-z0-9+._-]*", text.lower())
+        if len(token) > 1 and token not in STOPWORDS
+    ]
+
+
+def _score_skill(skill: SkillRecord, task: str, agent: str, target: str) -> tuple[int, list[str]]:
+    combined = " ".join(
+        [
+            skill.name,
+            skill.description,
+            skill.category,
+            skill.trigger,
+            " ".join(skill.targets),
+            skill.body[:6000],
+        ]
+    ).lower()
+    name_desc = f"{skill.name} {skill.description}".lower()
+    tokens = list(dict.fromkeys(_tokenize(" ".join([task, agent, target]))))
+
+    score = 0
+    matched: list[str] = []
+    for token in tokens:
+        if token not in combined:
+            continue
+        matched.append(token)
+        score += 5 if token in name_desc else 2
+        if token in skill.targets:
+            score += 2
+        if token == skill.source:
+            score += 1
+
+    if target and skill.targets and target.lower() in skill.targets:
+        score += 3
+    if agent and agent.lower() in combined:
+        score += 2
+
+    return score, matched
+
+
+def _resolve_skill_matches(
+    task: str,
+    agent: str = "",
+    target: str = "",
+    limit: int = 8,
+) -> list[tuple[SkillRecord, int, list[str]]]:
+    scored: list[tuple[SkillRecord, int, list[str]]] = []
+    for skill in _discover_skills():
+        if skill.trigger in META_TOOL_TRIGGERS:
+            continue
+        score, matched = _score_skill(skill, task, agent, target)
+        if score <= 0:
+            continue
+        scored.append((skill, score, sorted(set(matched))))
+
+    scored.sort(key=lambda item: (-item[1], item[0].source, item[0].name.lower()))
+    return scored[: max(1, min(limit, 20))]
 
 def _headers() -> dict:
     h = {"Content-Type": "application/json"}
@@ -260,6 +739,8 @@ async def _engine_search(query: str, k: int = 5, namespace: str | None = None) -
 
 
 def _read_vault_file(relative_path: str) -> str:
+    if relative_path in {ACTIVE_CONTEXT_PATH, SESSION_HANDOFF_PATH, FRESHNESS_PATH}:
+        ensure_state_files(VAULT_PATH)
     full_path = (VAULT_PATH / relative_path).resolve()
     if not str(full_path).startswith(str(VAULT_PATH.resolve())):
         raise PermissionError("Path traversal not allowed")
@@ -273,6 +754,31 @@ def _list_vault(directory: str = "") -> list[str]:
     if not target.exists() or not target.is_dir():
         return []
     return [str(p.relative_to(VAULT_PATH)) for p in sorted(target.rglob("*.md"))]
+
+
+def _format_skill_summary(
+    skill: SkillRecord,
+    matched: list[str] | None = None,
+    score: int | None = None,
+) -> str:
+    lines = [
+        f"**{skill.skill_id}**",
+        f"source: {skill.source}",
+        f"name: {skill.name}",
+        f"path: {skill.path}",
+        f"category: {skill.category}",
+    ]
+    if skill.trigger:
+        lines.append(f"trigger: {skill.trigger}")
+    if skill.targets:
+        lines.append(f"targets: {', '.join(skill.targets)}")
+    if score is not None:
+        lines.append(f"score: {score}")
+    if matched:
+        lines.append(f"matched: {', '.join(matched)}")
+    if skill.description:
+        lines.append(f"description: {skill.description}")
+    return "\n".join(lines)
 
 # ─── Tool Handlers ────────────────────────────────────────────────────────────
 
@@ -404,6 +910,219 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             )
         except Exception as e:
             return f"Migration failed: {e}"
+
+    elif name == "list_skills":
+        query = arguments.get("query", "").strip().lower()
+        source = arguments.get("source", "").strip().lower()
+        category = arguments.get("category", "").strip().lower()
+        target = arguments.get("target", "").strip().lower()
+        limit = max(1, min(int(arguments.get("limit", 25)), 100))
+
+        skills = []
+        for skill in _discover_skills():
+            if source and skill.source != source:
+                continue
+            if category and skill.category.lower() != category:
+                continue
+            if target and target not in " ".join(
+                [skill.name, skill.description, " ".join(skill.targets)]
+            ).lower():
+                continue
+            if query:
+                haystack = " ".join(
+                    [skill.skill_id, skill.name, skill.description, skill.body[:2000]]
+                ).lower()
+                if query not in haystack:
+                    continue
+            skills.append(skill)
+
+        if not skills:
+            return "No skills matched the filters."
+
+        parts = [_format_skill_summary(skill) for skill in skills[:limit]]
+        return f"Registered skills: {len(skills)} match(es)\n\n" + "\n\n---\n\n".join(parts)
+
+    elif name == "read_skill":
+        skill = _find_skill(
+            skill_id=arguments.get("skill_id", ""),
+            name=arguments.get("name", ""),
+            source=arguments.get("source", ""),
+        )
+        if not skill:
+            return "Skill not found. Use list_skills first."
+        return (
+            f"# {skill.name}\n\n"
+            f"- skill_id: `{skill.skill_id}`\n"
+            f"- source: `{skill.source}`\n"
+            f"- path: `{skill.path}`\n"
+            f"- category: `{skill.category}`\n"
+            f"- trigger: `{skill.trigger or 'n/a'}`\n"
+            f"- targets: `{', '.join(skill.targets) if skill.targets else 'n/a'}`\n\n"
+            f"{skill.body}"
+        )
+
+    elif name == "resolve_skills":
+        task = arguments.get("task", "").strip()
+        agent = arguments.get("agent", "").strip()
+        target = arguments.get("target", "").strip()
+        limit = max(1, min(int(arguments.get("limit", 8)), 20))
+
+        matches = _resolve_skill_matches(task=task, agent=agent, target=target, limit=limit)
+        if not matches:
+            return "No relevant skills matched. Try list_skills with a broader query."
+
+        parts = [
+            _format_skill_summary(skill, matched=matched, score=score)
+            for skill, score, matched in matches
+        ]
+        return (
+            f"Recommended skills for task: {task}\n"
+            f"agent: {agent or 'n/a'}\n"
+            f"target: {target or 'n/a'}\n\n"
+            + "\n\n---\n\n".join(parts)
+        )
+
+    elif name == "bootstrap_agent":
+        agent = arguments.get("agent", "").strip()
+        task = arguments.get("task", "").strip()
+        target = arguments.get("target", "").strip()
+        reason = arguments.get("reason", "startup").strip() or "startup"
+        limit = max(1, min(int(arguments.get("limit", 6)), 12))
+
+        ensure_state_files(VAULT_PATH)
+        working_set = read_working_set(VAULT_PATH)
+        handoff = read_handoff(VAULT_PATH)
+        freshness = refresh_freshness_report(VAULT_PATH, write=False)
+        stale_entries = [item for item in freshness["entries"] if item["freshness"] != "fresh"]
+
+        effective_task = task or working_set["mission"] or working_set["summary"] or agent
+        matches = _resolve_skill_matches(task=effective_task, agent=agent, target=target, limit=limit)
+        skill_lines = []
+        for skill, score, matched in matches:
+            skill_lines.append(
+                f"- {skill.skill_id} ({skill.source})"
+                f" — score {score}, matched: {', '.join(matched) if matched else 'general'}"
+            )
+
+        search_query = " | ".join(part for part in [effective_task, target, agent] if part).strip() or agent
+        priority_lines = "\n".join(f"- {item}" for item in working_set["priorities"]) or "- No priorities set."
+        next_action_lines = "\n".join(f"- {item}" for item in handoff["next_actions"]) or "- No next actions recorded."
+        stale_lines = "\n".join(
+            f"- {item['path']} — {item['freshness']} ({item['notes']})"
+            for item in stale_entries[:8]
+        ) or "- No stale core files detected."
+
+        return (
+            f"# Command Center Bootstrap\n\n"
+            f"agent: {agent}\n"
+            f"reason: {reason}\n"
+            f"task: {task or effective_task or 'n/a'}\n"
+            f"target: {target or 'n/a'}\n\n"
+            f"## Load These Resources First\n"
+            f"- vault://core/soul\n"
+            f"- vault://core/user\n"
+            f"- vault://core/company-soul\n"
+            f"- vault://core/active-context\n"
+            f"- vault://core/session-handoff\n"
+            f"- vault://core/freshness\n"
+            f"- vault://archive/memory\n\n"
+            f"## Working Set Snapshot\n"
+            f"- active_project: {working_set['metadata'].get('active_project', 'n/a') or 'n/a'}\n"
+            f"- mission: {working_set['mission'] or 'n/a'}\n"
+            f"- summary: {working_set['summary'] or 'n/a'}\n\n"
+            f"### Current Priorities\n"
+            f"{priority_lines}\n\n"
+            f"### Next Actions\n"
+            f"{next_action_lines}\n\n"
+            f"## First Memory Search\n"
+            f"- search_memory(query=\"{search_query}\")\n\n"
+            f"## Recommended Skills\n"
+            f"{chr(10).join(skill_lines) if skill_lines else '- No direct skill matches found yet.'}\n\n"
+            f"## Freshness Warnings\n"
+            f"{stale_lines}\n\n"
+            f"## Operating Order\n"
+            f"1. Read the core identity files plus active-context, session-handoff, and freshness.\n"
+            f"2. Run the first memory search.\n"
+            f"3. Call read_skill() on each recommended skill before planning.\n"
+            f"4. If this is a post-compact recovery, trust the working set and handoff before old chat fragments.\n"
+            f"5. Store durable preferences with store(), update_working_set(), record_handoff(), or verify_vault_file()."
+        )
+
+    elif name == "update_working_set":
+        try:
+            path = write_working_set(
+                VAULT_PATH,
+                project=arguments.get("project", ""),
+                mission=arguments.get("mission", ""),
+                summary=arguments.get("summary", ""),
+                priorities=arguments.get("priorities"),
+                constraints=arguments.get("constraints"),
+                open_questions=arguments.get("open_questions"),
+                next_actions=arguments.get("next_actions"),
+                files=arguments.get("files"),
+                source=arguments.get("source", "agent"),
+            )
+            return (
+                "Updated active working set.\n"
+                f"File: {path.relative_to(VAULT_PATH)}\n\n"
+                f"{_read_vault_file(ACTIVE_CONTEXT_PATH)}"
+            )
+        except Exception as e:
+            return f"Failed to update working set: {e}"
+
+    elif name == "record_handoff":
+        try:
+            path = write_session_handoff(
+                VAULT_PATH,
+                summary=arguments.get("summary", ""),
+                next_actions=arguments.get("next_actions"),
+                changed_files=arguments.get("changed_files"),
+                open_questions=arguments.get("open_questions"),
+                risks=arguments.get("risks"),
+                source=arguments.get("source", "agent"),
+            )
+            return (
+                "Recorded session handoff.\n"
+                f"File: {path.relative_to(VAULT_PATH)}\n\n"
+                f"{_read_vault_file(SESSION_HANDOFF_PATH)}"
+            )
+        except Exception as e:
+            return f"Failed to record handoff: {e}"
+
+    elif name == "verify_vault_file":
+        try:
+            path = mark_vault_file_verified(
+                VAULT_PATH,
+                relative_path=arguments.get("path", ""),
+                status=arguments.get("status", "active"),
+                note=arguments.get("note", ""),
+                review_after_days=arguments.get("review_after_days"),
+                source=arguments.get("source", "agent"),
+            )
+            return (
+                "Verified vault file freshness.\n"
+                f"File: {path.relative_to(VAULT_PATH)}"
+            )
+        except FileNotFoundError as e:
+            return f"File not found: {e}"
+        except Exception as e:
+            return f"Failed to verify vault file: {e}"
+
+    elif name == "freshness_report":
+        try:
+            report = refresh_freshness_report(
+                VAULT_PATH,
+                stale_days=max(1, int(arguments.get("stale_days", 7))),
+                write=bool(arguments.get("write", True)),
+            )
+            counts = report["counts"]
+            return (
+                f"Freshness report generated.\n"
+                f"fresh={counts['fresh']} stale={counts['stale']} missing={counts['missing']}\n\n"
+                f"{report['markdown']}"
+            )
+        except Exception as e:
+            return f"Failed to generate freshness report: {e}"
 
     return f"Unknown tool: {name}"
 

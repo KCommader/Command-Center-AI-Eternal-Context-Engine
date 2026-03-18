@@ -7,6 +7,9 @@ vault/lancedb_unified/
 vault/Core/USER.md
 vault/Core/SOUL.md
 vault/Core/COMPANY-SOUL.md
+vault/Core/ACTIVE_CONTEXT.md
+vault/Core/SESSION_HANDOFF.md
+vault/Core/FRESHNESS.md
 vault/Archive/MEMORY.md
 
 # Migration output — analysis files are personal history, never commit
