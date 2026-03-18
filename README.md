@@ -21,15 +21,17 @@ Your AI shouldn't start from scratch every session. Command Center gives any AI 
 
 ---
 
-## The Problem: Compaction Destroys Context
+## The Problem: AI Loses Context and Starts Hallucinating
 
-Every AI provider compacts long conversations. Claude does it. GPT does it. Gemini does it. When compaction hits, your AI forgets everything — the architecture you decided on three hours ago, the bug you just fixed, the reason you made that tradeoff. You re-explain. It re-hallucinates. You lose momentum. The project drifts.
+The longer a conversation gets, the worse your AI performs. It forgets decisions made earlier in the session. It contradicts itself. It loses track of your project structure, your preferences, your constraints. The hallucinations get worse — not better — as the conversation grows. You spend more time correcting the AI than building.
 
-This is the problem Command Center was built to fix.
+Then compaction hits. Every provider does it — Claude, GPT, Gemini. The conversation gets too long, the provider silently summarizes and discards the early context, and suddenly your AI has no idea what you were building or why.
 
-**Your context lives in your vault, not in the conversation.** The AI reads it at the start of every session, searches it when it needs context, and writes to it when you tell it to remember something. The conversation can compact, close, or switch to a completely different AI — your memory is still there, exactly where you left it.
+This is where Command Center came from.
 
-One call recovers everything:
+**Your context lives in your vault, not in the conversation.** The AI reads it at the start of every session, searches it when it needs context, and writes to it when you tell it to remember something. The conversation can drift, compact, close, or switch to a completely different AI — your memory is still there, grounded in actual files you wrote, exactly where you left it.
+
+One call resets and recovers everything:
 ```
 bootstrap_agent(reason="session_start")
 ```
