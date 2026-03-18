@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "command-center": {
+      "command": "python",
+      "args": [
+        "/home/cypher/Documents/Command-Center-AI/engine/mcp_server.py"
+      ],
+      "env": {
+        "OMNI_VAULT_PATH": "/home/cypher/Documents/Command-Center-AI/vault",
+        "OMNI_ENGINE_URL": "http://127.0.0.1:8765"
+      }
+    }
+  }
+}

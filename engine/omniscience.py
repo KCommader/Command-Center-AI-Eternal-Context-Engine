@@ -364,7 +364,95 @@ def build_parser() -> argparse.ArgumentParser:
     p_sync.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
     p_sync.set_defaults(func=cmd_sync_skills)
 
+    p_setup = sub.add_parser(
+        "setup-ai",
+        help="Write MCP config + bootstrap instruction for a connected AI runtime",
+    )
+    p_setup.add_argument(
+        "runtime",
+        nargs="?",
+        default="claude-code",
+        choices=["claude-code", "claude-desktop", "cursor", "zed"],
+        help="Which AI runtime to configure (default: claude-code)",
+    )
+    p_setup.add_argument(
+        "--vault", default=str(DEFAULT_VAULT), metavar="PATH",
+        help="Absolute path to the vault directory",
+    )
+    p_setup.set_defaults(func=cmd_setup_ai)
+
     return parser
+
+
+def cmd_setup_ai(args: argparse.Namespace) -> int:
+    """Write MCP config and bootstrap instructions for the chosen AI runtime."""
+    import json as _json
+
+    root = ROOT.resolve()
+    vault = Path(args.vault).resolve()
+    mcp_script = (root / "engine" / "mcp_server.py").as_posix()
+    runtime = args.runtime
+
+    mcp_block = {
+        "mcpServers": {
+            "command-center": {
+                "command": "python",
+                "args": [mcp_script],
+                "env": {
+                    "OMNI_VAULT_PATH": vault.as_posix(),
+                    "OMNI_ENGINE_URL": "http://127.0.0.1:8765",
+                },
+            }
+        }
+    }
+
+    if runtime == "claude-code":
+        config_dir = root / ".claude"
+        config_dir.mkdir(exist_ok=True)
+        config_path = config_dir / "mcp_config.json"
+        config_path.write_text(_json.dumps(mcp_block, indent=2), encoding="utf-8")
+        print(f"[setup-ai] Wrote {config_path}")
+        print()
+        print("Bootstrap is already wired — CLAUDE.md tells Claude Code to call")
+        print("bootstrap_agent(reason='session_start') at the top of every session.")
+        print()
+        print("Start the engine, then open this project in Claude Code and you're live.")
+        print(f"  python engine/omniscience.py start")
+
+    elif runtime == "claude-desktop":
+        import platform
+        if platform.system() == "Darwin":
+            dest = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
+        else:
+            dest = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
+
+        existing: dict = {}
+        if dest.exists():
+            try:
+                existing = _json.loads(dest.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        existing.setdefault("mcpServers", {})
+        existing["mcpServers"]["command-center"] = mcp_block["mcpServers"]["command-center"]
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(_json.dumps(existing, indent=2), encoding="utf-8")
+        print(f"[setup-ai] Wrote {dest}")
+        print()
+        print("Restart Claude Desktop to pick up the new MCP server.")
+        print("Then start a conversation with:  bootstrap_agent(reason='session_start')")
+
+    elif runtime in ("cursor", "zed"):
+        config_path = root / ".cursor" / "mcp.json" if runtime == "cursor" else root / ".zed" / "settings.json"
+        config_path.parent.mkdir(exist_ok=True)
+        config_path.write_text(_json.dumps(mcp_block, indent=2), encoding="utf-8")
+        print(f"[setup-ai] Wrote {config_path}")
+        print()
+        print(f"Reload {runtime.title()} to pick up the MCP server.")
+        print("Call bootstrap_agent(reason='session_start') at the start of each session.")
+
+    print()
+    print("Done. Run `python engine/omniscience.py doctor` to verify.")
+    return 0
 
 
 def main() -> int:
