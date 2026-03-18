@@ -21,20 +21,15 @@ Your AI shouldn't start from scratch every session. Command Center gives any AI 
 
 ---
 
-## The Problem: AI Loses Context and Starts Hallucinating
+## The Problem: The Longer the Conversation, the Worse the AI Gets
 
-The longer a conversation gets, the worse your AI performs. It forgets decisions made earlier in the session. It contradicts itself. It loses track of your project structure, your preferences, your constraints. The hallucinations get worse — not better — as the conversation grows. You spend more time correcting the AI than building.
+Every AI has this problem — Claude, GPT, Gemini, Grok, Codex, all of them. The longer a conversation runs, the more the model degrades. It forgets decisions made earlier in the session. It contradicts itself. It loses track of your architecture, your preferences, your constraints. The hallucinations get more frequent, not less. You spend more time correcting than building.
 
-Then compaction hits. Every provider does it — Claude, GPT, Gemini. The conversation gets too long, the provider silently summarizes and discards the early context, and suddenly your AI has no idea what you were building or why.
+This isn't just compaction — though compaction makes it catastrophic. Compaction is when a provider (Claude, GPT, Gemini, Grok) silently summarizes and discards early context to free up space. Suddenly your AI has no idea what you were building or why. But the drift was already happening before the cut.
 
-This is where Command Center came from.
+**This is where Command Center came from.** The goal isn't a reset button — it's an AI that's always on point because it never had to rely on conversation history in the first place.
 
-**Your context lives in your vault, not in the conversation.** The AI reads it at the start of every session, searches it when it needs context, and writes to it when you tell it to remember something. The conversation can drift, compact, close, or switch to a completely different AI — your memory is still there, grounded in actual files you wrote, exactly where you left it.
-
-One call resets and recovers everything:
-```
-bootstrap_agent(reason="session_start")
-```
+Your context lives in your vault, not in the conversation. The AI reads it at the start of every session, searches it when it needs context, and writes to it when something matters. The conversation can drift, compact, close, or switch to a completely different AI — your memory is still there, grounded in actual files you wrote, exactly where you left it. No re-explaining. No re-hallucinating. No momentum lost.
 
 ---
 
