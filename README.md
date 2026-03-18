@@ -99,7 +99,7 @@ Once connected, the AI gets these tools automatically:
 - `store` — save facts/decisions (engine auto-classifies into the right memory tier)
 - `read_vault_file` — read any vault document
 - `list_vault` — browse available notes
-- `list_skills` — browse the cross-AI Commander skill catalog
+- `list_skills` — browse the cross-AI skill catalog
 - `read_skill` — load one skill from the registry
 - `resolve_skills` — recommend the right skills for a task or runtime
 - `bootstrap_agent` — generate a standard startup or post-compact recovery packet

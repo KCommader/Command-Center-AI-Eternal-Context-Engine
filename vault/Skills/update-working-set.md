@@ -21,10 +21,10 @@ Use it after:
 ## Usage
 ```text
 update_working_set(
-  project="AlphaEngine",
-  mission="Make the prediction market bot trade only high-edge setups",
-  summary="Oracle-lag only, BTC/ETH only, awaiting more live samples",
-  priorities=["Validate fills", "Monitor overnight opportunities"],
-  next_actions=["Review fresh trades in the morning"]
+  project="my-app",
+  mission="Ship the v1 checkout flow without regressions",
+  summary="Cart and payment screens done, confirmation screen pending",
+  priorities=["Wire Stripe webhook", "Add order confirmation email"],
+  next_actions=["Resume from PaymentIntent callback handler"]
 )
 ```

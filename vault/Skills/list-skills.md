@@ -3,14 +3,14 @@ type: skill
 status: active
 category: skills
 trigger: list_skills
-description: Browse the cross-AI Commander skill catalog across vault and external skill libraries
+description: Browse the cross-AI skill catalog across vault and external skill libraries
 source: Command Center MCP
 targets: [claude, codex, custom-ai, custom-ai]
 ---
 
 # list_skills
 
-Lists the portable Commander skill catalog. This includes vault-native skills and external prompt-skill libraries such as `~/.claude/skills`.
+Lists the portable skill catalog. This includes vault-native skills and external prompt-skill libraries such as `~/.claude/skills`.
 
 ## Usage
 ```text
