@@ -27,6 +27,17 @@ cssclasses:
 
 ---
 
+## Operating State
+
+> [!state] Eternal Context Engine
+> These files are the enforced working set for startup and post-compact recovery.
+>
+> **[[Core/ACTIVE_CONTEXT|ACTIVE CONTEXT]]** — current mission, priorities, constraints, next actions
+> **[[Core/SESSION_HANDOFF|SESSION HANDOFF]]** — latest durable checkpoint between sessions
+> **[[Core/FRESHNESS|FRESHNESS]]** — stale-file detector for the core operating files
+
+---
+
 ## Memory
 
 > [!memory] Long-Term Memory
