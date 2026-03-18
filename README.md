@@ -9,6 +9,7 @@
 [![LanceDB](https://img.shields.io/badge/Vector%20DB-LanceDB-orange?style=flat-square)](https://lancedb.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Obsidian](https://img.shields.io/badge/Vault-Obsidian%20Native-7C3AED?style=flat-square&logo=obsidian)](https://obsidian.md)
+[![Contributions Welcome](https://img.shields.io/badge/contributions-welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 
 </div>
 
@@ -17,6 +18,21 @@ Your AI shouldn't start from scratch every session. Command Center gives any AI 
 **Works with**: Claude Desktop, Claude Code, Cursor, Zed, Gemini CLI, OpenClaw, or any MCP-compatible AI.
 
 > No cloud. No subscriptions. No lock-in. Your context lives on your machine — or on a USB drive.
+
+---
+
+## The Problem: Compaction Destroys Context
+
+Every AI provider compacts long conversations. Claude does it. GPT does it. Gemini does it. When compaction hits, your AI forgets everything — the architecture you decided on three hours ago, the bug you just fixed, the reason you made that tradeoff. You re-explain. It re-hallucinates. You lose momentum. The project drifts.
+
+This is the problem Command Center was built to fix.
+
+**Your context lives in your vault, not in the conversation.** The AI reads it at the start of every session, searches it when it needs context, and writes to it when you tell it to remember something. The conversation can compact, close, or switch to a completely different AI — your memory is still there, exactly where you left it.
+
+One call recovers everything:
+```
+bootstrap_agent(reason="session_start")
+```
 
 ---
 
@@ -57,6 +73,18 @@ python engine/omniscience.py start
 
 # 5. Connect your AI (see below)
 ```
+
+**One-command setup** — writes the right MCP config for your AI runtime automatically:
+```bash
+python engine/omniscience.py setup-ai claude-code      # Claude Code
+python engine/omniscience.py setup-ai claude-desktop   # Claude Desktop
+python engine/omniscience.py setup-ai cursor           # Cursor
+python engine/omniscience.py setup-ai zed              # Zed
+```
+
+After `setup-ai`, your AI reads `CLAUDE.md` at startup and calls `bootstrap_agent(reason="session_start")` automatically. Compaction becomes a non-event.
+
+> Manual MCP config snippets are in [Connecting Your AI](#connecting-your-ai) below.
 
 ---
 
@@ -99,6 +127,15 @@ Once connected, the AI gets these tools automatically:
 - `store` — save facts/decisions (engine auto-classifies into the right memory tier)
 - `read_vault_file` — read any vault document
 - `list_vault` — browse available notes
+- `list_skills` — list all skills available in the vault
+- `read_skill` — load a specific skill prompt on demand
+- `resolve_skills` — auto-detect which skills are relevant to the current task
+- `bootstrap_agent` — recover full context after provider compaction (see Bootstrap section)
+- `update_working_set` — pin the files and context most relevant to active work
+- `record_handoff` — write a durable session summary before ending a session
+- `verify_vault_file` — confirm a vault file exists and is readable
+- `freshness_report` — show when each core context file was last updated
+- `sync_skills` — sync vault skills to any connected AI runtime (Claude, Gemini, Codex)
 
 ### Option B — Network MCP via Streamable HTTP (NAS / Multi-Machine)
 
@@ -163,6 +200,35 @@ The three Core files are your foundation. Fill them in once and every AI session
 
 ---
 
+## Bootstrap — Surviving Compaction
+
+Every AI provider compacts long conversations. When that happens, the AI forgets everything — your project, your preferences, your active work. This is the problem Command Center was built to solve.
+
+**The bootstrap tool recovers full context in one call:**
+
+```
+bootstrap_agent(reason="session_start")
+```
+
+The engine reads your Core files (USER, SOUL, COMPANY-SOUL), your active session handoff, and your working set — then returns a single recovery packet the AI uses to resume as if the conversation never compacted.
+
+**To wire it up for automatic recovery:**
+
+```bash
+# Claude Code — add to your project's .claude/settings.json
+# "hooks": { "PreToolUse": [{ "matcher": "", "hooks": [...] }] }
+# See vault/Skills/bootstrap-agent.md for full setup
+```
+
+The three operating state files that bootstrap reads:
+- `vault/Core/SESSION_HANDOFF.md` — what was just done, what comes next
+- `vault/Core/ACTIVE_CONTEXT.md` — current working set and project state
+- `vault/Core/FRESHNESS.md` — timestamp snapshot of when each file was last updated
+
+Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agent` at the start of the next one. Compaction becomes a non-event.
+
+---
+
 ## App Mode (Background Process)
 
 ```bash
@@ -193,6 +259,60 @@ The repo ships a complete `.obsidian/` config inside `vault/` with everything pr
 **First thing to do after opening the vault:** Install the [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) community plugin (Settings → Community plugins → Browse → "Dataview"). HOME.md uses it for live memory queries — without it, queries show as code blocks.
 
 > The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
+
+---
+
+## Screenshots
+
+<div align="center">
+
+| Dashboard (HOME.md) | Knowledge Graph |
+|---|---|
+| ![Dashboard](assets/screenshots/home-dashboard.png) | ![Graph View](assets/screenshots/graph-view.png) |
+
+</div>
+
+---
+
+## Skills — Universal Across All AIs
+
+Skills are Markdown prompt libraries that live in `vault/Skills/`. Any connected AI can load them on demand — and the skill adapter syncs them to each AI's native format automatically.
+
+```
+vault/Skills/          →  ~/.claude/skills/         (Claude Code)
+                       →  ~/.gemini/skills/          (Gemini CLI)
+                       →  ~/.codex/skills/           (Codex)
+                       →  workspace/skills/*/SKILL.md (OpenClaw)
+```
+
+```bash
+# Sync all vault skills to every connected runtime
+python engine/omniscience.py sync-skills
+
+# Sync to a specific runtime only
+python engine/omniscience.py sync-skills --runtime claude
+
+# Preview without writing
+python engine/omniscience.py sync-skills --dry-run
+```
+
+Or via MCP: `sync_skills({ "runtimes": ["claude", "gemini"] })`
+
+**Writing a skill** — drop a `.md` file in `vault/Skills/` with this frontmatter:
+
+```markdown
+---
+type: skill
+trigger: my-skill-name
+description: What this skill does
+targets: [claude, gemini, codex]
+---
+
+# My Skill
+... the prompt content the AI loads ...
+```
+
+The vault is the source of truth. Runtimes are output targets, never edited directly.
 
 ---
 
@@ -247,6 +367,7 @@ What it does:
 - **Admin cleanup** — calls engine's `/admin/cleanup` endpoint if engine is running
 - **Cache purge** — deletes all files in `vault/Cache/` (session noise, not worth keeping)
 - **Short-term expiry** — removes files in `vault/Archive/short/` older than 30 days (configurable via `--short-term-ttl`)
+- **Freshness snapshot** — updates `vault/Core/FRESHNESS.md` so bootstrap always knows current state
 - Logs everything to `.omniscience/nightly.log`
 
 ---
@@ -287,8 +408,10 @@ export OMNI_API_KEYS_ADMIN="admin_token"
 | `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
 | `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
 | `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
-| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/sync-skills |
 | `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
+| `engine/context_state.py` | Anti-compaction | Reads/writes SESSION_HANDOFF, ACTIVE_CONTEXT, FRESHNESS — bootstrap recovery packet |
+| `engine/skill_adapter.py` | Universal skills | Syncs vault/Skills/ to Claude, Gemini, Codex, OpenClaw native formats |
 
 **Key design decisions:**
 - **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
@@ -329,3 +452,5 @@ MIT — use freely, modify freely, ship it.
 ## Contributing
 
 Issues and PRs welcome. The goal is a simple, portable, powerful memory layer — keep it lean.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for what's most needed (migration parsers, AI runtime adapters, MCP setup UX) and the core principles (portable, Markdown-first, no lock-in).
