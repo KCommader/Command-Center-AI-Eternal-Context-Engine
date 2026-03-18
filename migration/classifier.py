@@ -1,7 +1,7 @@
 """
 Keyword-based conversation classifier.
 
-Default categories are tuned for Commander Capital projects.
+Default categories cover common project types.
 Customize by passing your own categories dict to Classifier().
 
 Categories dict format:
@@ -24,7 +24,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
         "dex", "swap", "yield", "staking", "prediction market", "token", "altcoin",
         "market maker", "order book", "liquidate", "alphaengine", "orderflow",
         "price action", "ltr", "liquidity trap", "fvg", "bos", "volume indicator",
-        "signal framework", "algorithmic trading", "trading fund",
+        "signal framework", "trading bot", "algo trading",
     ],
     "AI / Bots / Automation": [
         "openai", "gpt", "claude", "llm", "langchain", "ai agent", "chatbot",
@@ -61,7 +61,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
     ],
     "Business / Brand": [
         "shopify", "ecommerce", "dropshipping", "revenue model", "business plan",
-        "startup", "pricing strategy", "trading syndicate", "brand identity",
+        "startup", "pricing strategy", "brand identity",
         "trademark", "marketing", "content strategy", "youtube channel",
         "affiliate", "monetiz", "saas",
     ],
