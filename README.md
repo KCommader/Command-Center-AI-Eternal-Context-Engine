@@ -23,13 +23,13 @@ Your AI shouldn't start from scratch every session. Command Center gives any AI 
 
 ## The Problem: The Longer the Conversation, the Worse the AI Gets
 
-Every AI has this problem — Claude, GPT, Gemini, Grok, Codex, all of them. The longer a conversation runs, the more the model degrades. It forgets decisions made earlier in the session. It contradicts itself. It loses track of your architecture, your preferences, your constraints. The hallucinations get more frequent, not less. You spend more time correcting than building.
+Every AI has this problem — Claude, GPT, Gemini, Grok, Codex, all of them. The longer a conversation runs, the more the model degrades. It forgets decisions. It contradicts itself. It loses track of your architecture, your constraints, what you already ruled out. The hallucinations get more frequent, not less. You spend more time correcting than building.
 
-This isn't just compaction — though compaction makes it catastrophic. Compaction is when a provider (Claude, GPT, Gemini, Grok) silently summarizes and discards early context to free up space. Suddenly your AI has no idea what you were building or why. But the drift was already happening before the cut.
+When the conversation gets long enough, the provider compacts it — silently replacing your entire history with a summary. Suddenly your AI has no idea what you were building or why.
 
-**This is where Command Center came from.** The goal isn't a reset button — it's an AI that's always on point because it never had to rely on conversation history in the first place.
+Understanding *why* this happens — what compaction actually is, what gets lost and why the AI can't tell — is covered in full in [Bootstrap — Surviving Compaction](#bootstrap--surviving-compaction).
 
-Your context lives in your vault, not in the conversation. The AI reads it at the start of every session, searches it when it needs context, and writes to it when something matters. The conversation can drift, compact, close, or switch to a completely different AI — your memory is still there, grounded in actual files you wrote, exactly where you left it. No re-explaining. No re-hallucinating. No momentum lost.
+**Command Center was built to fix this permanently.** Your context lives in your vault, not in the conversation. The AI is always grounded to what's actually true — regardless of how long the conversation runs, how many times it compacts, or which AI you're using. No re-explaining. No re-hallucinating. No momentum lost.
 
 ---
 
@@ -199,15 +199,23 @@ The three Core files are your foundation. Fill them in once and every AI session
 
 ## Bootstrap — Surviving Compaction
 
-The bootstrap tool reads your vault state and returns a full recovery packet in one call:
+**What compaction actually is**
+
+Every AI runs on a context window — a hard limit on how much text the model can hold in working memory at once. Claude's is 200,000 tokens. GPT-4's is 128,000. When a long conversation approaches that limit, the provider has a problem: there's no more room.
+
+So they compact. The provider takes your entire conversation history and replaces it with a summary — automatically, silently, without asking. The specific code you shared becomes "user shared some code." The architecture decision you locked in becomes "user discussed project structure." The constraint you set becomes "user mentioned some requirements."
+
+The AI doesn't know what was lost. It works from the summary as if it were the full picture — and fills the gaps with hallucination. That's why it suddenly contradicts decisions you made earlier, suggests approaches you already ruled out, or acts like it's meeting your project for the first time. It's not malfunctioning. It literally no longer has access to what you said.
+
+Bootstrap solves this by giving the AI a source of truth that lives outside the conversation:
 
 ```
 bootstrap_agent(reason="session_start")
 ```
 
-The engine reads your Core identity files, your active session handoff, and your working set — then hands the AI everything it needs to resume as if the conversation never compacted.
+The engine reads your Core identity files, your active session handoff, and your working set — then hands the AI everything it needs to resume. Not a summary of a summary. The actual files you wrote.
 
-**Automatic wiring** — `setup-ai` writes `CLAUDE.md` into your project, which Claude Code reads at startup and uses to call bootstrap automatically. For other runtimes, add this to your system prompt or session opener:
+**Automatic wiring** — `setup-ai` writes `CLAUDE.md` into your project, which Claude Code reads at startup and calls bootstrap automatically. For other runtimes, add this to your system prompt or session opener:
 
 ```
 At the start of every session: call bootstrap_agent(reason="session_start") before anything else.
@@ -450,4 +458,4 @@ MIT — use freely, modify freely, ship it.
 
 Issues and PRs welcome. The goal is a simple, portable, powerful memory layer — keep it lean.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for what's most needed (migration parsers, AI runtime adapters, MCP setup UX) and the core principles (portable, Markdown-first, no lock-in).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for ideas on where to contribute and the core principles (portable, Markdown-first, no lock-in). If it pushes the mission forward, it belongs here.
