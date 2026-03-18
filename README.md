@@ -20,6 +20,26 @@ Your AI shouldn't start from scratch every session. Command Center gives any AI 
 
 ---
 
+## What It Looks Like
+
+<div align="center">
+
+<img src="assets/screenshots/home-dashboard.png" alt="Command Center Home Dashboard" width="100%" />
+
+*The Obsidian dashboard — your vault's home page. Every section explains itself and links to live data via Dataview queries.*
+
+</div>
+
+<div align="center">
+
+<img src="assets/screenshots/graph-view.png" alt="Knowledge Graph View" width="100%" />
+
+*Graph view — every note, skill, and memory as a constellation. Core files (cyan) anchor the identity layer. Archive (violet) holds long-term memory. Knowledge (green) holds your domain notes.*
+
+</div>
+
+---
+
 ## What It Does
 
 ```
