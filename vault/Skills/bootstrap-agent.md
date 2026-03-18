@@ -3,14 +3,14 @@ type: skill
 status: active
 category: skills
 trigger: bootstrap_agent
-description: Generate a standard Commander startup packet so any AI runtime can load the same context and skills
+description: Generate a standard startup packet so any AI runtime can load the same context and skills
 source: Command Center MCP
 targets: [claude, codex, openclaw, openfang, any-ai]
 ---
 
 # bootstrap_agent
 
-Returns the standard Commander startup or recovery flow for an agent: which resources to read, what memory search to run first, which operating-state files to trust, and which skills to load for the active task.
+Returns the standard startup or recovery flow for an agent: which resources to read, what memory search to run first, which operating-state files to trust, and which skills to load for the active task.
 
 ## Usage
 ```text

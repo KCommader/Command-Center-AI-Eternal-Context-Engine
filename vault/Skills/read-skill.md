@@ -3,19 +3,19 @@ type: skill
 status: active
 category: skills
 trigger: read_skill
-description: Load the full text of a registered Commander skill by canonical id or name
+description: Load the full text of a registered skill by canonical id or name
 source: Command Center MCP
 targets: [claude, codex, openclaw, openfang]
 ---
 
 # read_skill
 
-Reads one skill from the Commander registry. Use this after `list_skills` or `resolve_skills` to load the exact skill instructions into the current session.
+Reads one skill from the registry. Use this after `list_skills` or `resolve_skills` to load the exact skill instructions into the current session.
 
 ## Usage
 ```text
 read_skill(skill_id="claude:elite-landing-page")
-read_skill(name="kaiju-capital-trader", source="claude")
+read_skill(name="elite-landing-page", source="claude")
 ```
 
 ## Notes

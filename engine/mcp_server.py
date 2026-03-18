@@ -284,7 +284,7 @@ TOOLS = [
         "name": "resolve_skills",
         "description": (
             "Recommend the most relevant skills for a task, agent, or target stack. "
-            "Use this to map Commander skill knowledge onto any AI runtime."
+            "Use this to map skill knowledge onto any AI runtime."
         ),
         "inputSchema": {
             "type": "object",
@@ -429,6 +429,36 @@ TOOLS = [
                 }
             }
         }
+    },
+    {
+        "name": "sync_skills",
+        "description": (
+            "Sync vault/Skills/ to all connected AI runtimes (Claude Code, Gemini CLI, Codex, OpenClaw). "
+            "Vault is the canonical source. Each runtime gets skills in its own native format. "
+            "Use this after adding or editing a skill so every AI gets the update automatically. "
+            "Set dry_run=true to preview what would be written without making changes."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runtimes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Runtimes to sync (e.g. ['claude', 'gemini']). Default: all registered runtimes.",
+                    "default": []
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true, preview changes without writing files.",
+                    "default": False
+                },
+                "reverse": {
+                    "type": "boolean",
+                    "description": "If true, import skills FROM runtimes INTO vault (one-way promotion, vault wins on conflicts).",
+                    "default": False
+                }
+            }
+        }
     }
 ]
 
@@ -506,6 +536,7 @@ META_TOOL_TRIGGERS = {
     "record_handoff",
     "verify_vault_file",
     "freshness_report",
+    "sync_skills",
 }
 STOPWORDS = {
     "a", "an", "and", "any", "app", "apps", "as", "at", "be", "bot", "build", "for",
@@ -1123,6 +1154,51 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             )
         except Exception as e:
             return f"Failed to generate freshness report: {e}"
+
+    elif name == "sync_skills":
+        try:
+            from engine.skill_adapter import sync_skills, import_from_runtimes, ADAPTERS
+            runtimes_arg = arguments.get("runtimes") or []
+            runtimes = [r for r in runtimes_arg if r in ADAPTERS] or None
+            dry_run = bool(arguments.get("dry_run", False))
+            reverse = bool(arguments.get("reverse", False))
+
+            if reverse:
+                results = import_from_runtimes(
+                    runtimes=runtimes,
+                    vault_skills_path=VAULT_PATH / "Skills",
+                    dry_run=dry_run,
+                    verbose=False,
+                )
+                lines = ["Imported skills from runtimes into vault/Skills/\n"]
+            else:
+                results = sync_skills(
+                    runtimes=runtimes,
+                    source=VAULT_PATH / "Skills",
+                    dry_run=dry_run,
+                    verbose=False,
+                )
+                lines = [f"{'[DRY RUN] ' if dry_run else ''}Skill sync complete\n"]
+
+            for runtime, runtime_results in results.items():
+                written = sum(1 for r in runtime_results if r.action == "write")
+                unchanged = sum(1 for r in runtime_results if r.action == "unchanged")
+                dry = sum(1 for r in runtime_results if r.action == "dry_run")
+                errors = [r for r in runtime_results if r.action == "error"]
+                parts = []
+                if dry_run:
+                    parts.append(f"{dry} would write")
+                else:
+                    parts.append(f"{written} written, {unchanged} unchanged")
+                if errors:
+                    parts.append(f"{len(errors)} errors")
+                lines.append(f"  {runtime}: {', '.join(parts)}")
+                for e in errors:
+                    lines.append(f"    ERROR {e.skill_slug}: {e.error}")
+
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Failed to sync skills: {e}"
 
     return f"Unknown tool: {name}"
 

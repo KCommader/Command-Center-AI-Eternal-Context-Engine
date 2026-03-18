@@ -296,6 +296,36 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sync_skills(args: argparse.Namespace) -> int:
+    from engine.skill_adapter import (
+        sync_skills, import_from_runtimes, list_skills_table,
+        _SKILLS_SOURCE, ADAPTERS,
+    )
+    verbose = not getattr(args, "quiet", False)
+
+    if getattr(args, "list_skills", False):
+        list_skills_table(_SKILLS_SOURCE)
+        return 0
+
+    runtimes = getattr(args, "runtimes", None)
+    if runtimes:
+        unknown = [r for r in runtimes if r not in ADAPTERS]
+        if unknown:
+            print(f"Unknown runtime(s): {', '.join(unknown)}. Valid: {', '.join(ADAPTERS)}")
+            return 1
+
+    if getattr(args, "reverse", False):
+        import_from_runtimes(runtimes=runtimes, vault_skills_path=_SKILLS_SOURCE,
+                             dry_run=args.dry_run, verbose=verbose)
+    else:
+        results = sync_skills(runtimes=runtimes, source=_SKILLS_SOURCE,
+                              dry_run=args.dry_run, verbose=verbose)
+        errors = [r for rs in results.values() for r in rs if r.action == "error"]
+        if errors:
+            return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Omniscience launcher")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -322,6 +352,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs = sub.add_parser("logs", help="Show engine logs")
     p_logs.add_argument("--lines", type=int, default=60, help="Number of log lines")
     p_logs.set_defaults(func=cmd_logs)
+
+    p_sync = sub.add_parser("sync-skills", help="Sync vault/Skills/ to all AI runtimes")
+    p_sync.add_argument(
+        "--runtime", "-r", action="append", dest="runtimes", metavar="NAME",
+        help="Runtime to sync (claude, gemini, codex, openclaw). Repeat for multiple. Default: all."
+    )
+    p_sync.add_argument("--dry-run", "-n", action="store_true", help="Preview without writing")
+    p_sync.add_argument("--list", "-l", action="store_true", dest="list_skills", help="List vault skills and exit")
+    p_sync.add_argument("--reverse", action="store_true", help="Import FROM runtimes INTO vault")
+    p_sync.add_argument("--quiet", "-q", action="store_true", help="Suppress output")
+    p_sync.set_defaults(func=cmd_sync_skills)
 
     return parser
 
