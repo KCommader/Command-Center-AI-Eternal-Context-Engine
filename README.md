@@ -2,7 +2,7 @@
 
 <img src="assets/logo.png" alt="Command Center AI" width="720" />
 
-### Your AI Should Never Forget — Local, Private, Portable
+### Eternal Memory for Any AI — Local, Private, Portable
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://python.org)
 [![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP-purple?style=flat-square)](https://modelcontextprotocol.io)
@@ -13,39 +13,21 @@
 
 </div>
 
----
+Your AI shouldn't start from scratch every session. Command Center gives any AI tool permanent, searchable memory stored as Markdown files you can read, edit, and browse in Obsidian.
 
-## The Problem Everyone Hits
-
-You're deep in a project with Claude, GPT, or Gemini. Two hours in, the conversation gets long. The provider **compacts**. Suddenly your AI "forgets" the architecture decision from an hour ago. It hallucinates a file path. It suggests something you explicitly ruled out. You spend the next 20 minutes re-explaining yourself.
-
-This isn't a bug. It's how every LLM works. **Conversations have limits. Providers compact or truncate when they hit them. When they do, the AI loses its mind — and your project context goes with it.**
-
-There are hundreds of threads on X about this exact experience. People watching months of project context get wiped mid-session. It's the #1 friction point for anyone doing serious work with AI.
-
-**Command Center is the fix.**
-
----
-
-## How It Solves It
-
-Memory lives in **files on your machine**, not inside the conversation.
-
-At the start of every session, the AI reads your vault — who you are, your active project, what was decided last session, what your preferences are. When the conversation compacts or you switch tools entirely, it doesn't matter. The memory was never in the conversation. It lives in Markdown files that nothing can delete.
-
-```
-Without Command Center:                With Command Center:
-────────────────────────               ─────────────────────────────
-Session 1 → context                    Session 1 → AI reads vault
-    ↓ compaction                           ↓ work happens
-    context gone                           ↓ AI writes decisions to vault
-Session 2 → starts over                Session 2 → AI reads vault again
-Session 3 → starts over                Session 3 → same, full context
-```
-
-**Works with**: Claude Desktop, Claude Code, Cursor, Zed, Gemini CLI, Codex, or any MCP-compatible AI.
+**Works with**: Claude Desktop, Claude Code, Cursor, Zed, Gemini CLI, Custom AI, or any MCP-compatible AI.
 
 > No cloud. No subscriptions. No lock-in. Your context lives on your machine — or on a USB drive.
+
+---
+
+## The Problem This Solves
+
+You're deep in a project with Claude, GPT, or Gemini. The conversation gets long. The provider **compacts**. Suddenly the AI forgets the architecture decision you made an hour ago. It hallucinates a file path. It suggests something you already ruled out. You spend 20 minutes re-explaining yourself.
+
+This happens to everyone. It's not a bug — it's how LLMs work. **Conversations have limits. When providers hit them, they compact or truncate. Context is gone.**
+
+Command Center stores your memory in files on your machine — outside the conversation. The AI reads your vault at the start of every session. Compaction can't touch it.
 
 ---
 
@@ -55,7 +37,7 @@ Session 3 → starts over                Session 3 → same, full context
 
 <img src="assets/screenshots/home-dashboard.png" alt="Command Center Home Dashboard" width="100%" />
 
-*The Obsidian dashboard — your vault's home page. Browse your identity files, memory tiers, knowledge base, and skills all from one place.*
+*The Obsidian dashboard — your vault's home page. Browse your identity files, memory tiers, knowledge base, and skills.*
 
 </div>
 
@@ -63,9 +45,28 @@ Session 3 → starts over                Session 3 → same, full context
 
 <img src="assets/screenshots/graph-view.png" alt="Knowledge Graph View" width="100%" />
 
-*Graph view — every note, skill, and memory as a living constellation. Core files (cyan) anchor the identity layer. Archive (violet) holds long-term memory. Knowledge (green) holds your domain notes.*
+*Graph view — every note, skill, and memory as a living constellation. Core=cyan, Archive=violet, Knowledge=green.*
 
 </div>
+
+---
+
+## What It Does
+
+```
+Your Notes (Markdown)  →  Vault (Obsidian Graph View)
+         ↓
+    Engine indexes with LanceDB (local vector DB)
+         ↓
+  MCP Server / REST API  →  Any AI on your machine or network
+         ↓
+  AI remembers you. Every session. Across machines.
+```
+
+- **Write notes in Markdown** → Engine indexes them automatically
+- **AI searches your vault** via MCP or REST API — gets relevant context instantly
+- **Visualize your knowledge** in Obsidian's Graph View as it grows
+- **Migrate in 60 seconds** — copy folder to any machine or USB drive, reinstall deps, reindex
 
 ---
 
@@ -79,10 +80,10 @@ cd Command-Center-AI
 # 2. Setup (creates venv, installs deps, scaffolds vault)
 bash setup.sh
 
-# 3. Fill in your identity (this is what your AI will read every session)
-#    Edit: vault/Core/USER.md       ← who you are
-#    Edit: vault/Core/SOUL.md       ← how you want the AI to behave
-#    Edit: vault/Core/COMPANY-SOUL.md ← your project/organization context
+# 3. Fill in your identity
+# Edit: vault/Core/USER.md       ← who you are
+# Edit: vault/Core/SOUL.md       ← how you want the AI to behave
+# Edit: vault/Core/COMPANY-SOUL.md ← your project/org context
 
 # 4. Start the engine
 python engine/omniscience.py start
@@ -90,25 +91,17 @@ python engine/omniscience.py start
 # 5. Connect your AI (see below)
 ```
 
-Open `vault/` in [Obsidian](https://obsidian.md) to browse your memory visually.
-
 ---
 
 ## Connecting Your AI
 
-### Option A — MCP stdio (Claude Code, Claude Desktop, Cursor, Zed)
+### Option A — MCP (Recommended for Claude, Cursor, Zed)
 
-MCP (Model Context Protocol) is an open standard for giving AI tools access to external systems. Command Center speaks MCP natively — your vault becomes a set of tools the AI can call automatically.
+MCP is an open protocol. Any MCP-compatible AI gets your vault as tools + resources automatically.
 
-**Step 1: Make sure the engine is running first**
-```bash
-python engine/omniscience.py start
-python engine/omniscience.py doctor  # verify everything is healthy
-```
+> **Before connecting**: Use the absolute path to `.venv/bin/python` inside the repo — not system Python. Relative paths and system Python both break silently.
 
-**Step 2: Add to your AI's config**
-
-Claude Code (`~/.claude/settings.json`):
+**Claude Code** (`~/.claude/settings.json`):
 ```json
 {
   "mcpServers": {
@@ -124,7 +117,7 @@ Claude Code (`~/.claude/settings.json`):
 }
 ```
 
-Claude Desktop (`~/.config/claude/claude_desktop_config.json` or `~/Library/Application Support/Claude/claude_desktop_config.json` on Mac):
+**Claude Desktop** (`~/.config/claude/claude_desktop_config.json` on Linux, `~/Library/Application Support/Claude/claude_desktop_config.json` on Mac):
 ```json
 {
   "mcpServers": {
@@ -140,135 +133,115 @@ Claude Desktop (`~/.config/claude/claude_desktop_config.json` or `~/Library/Appl
 }
 ```
 
-> **Important**: Use the `.venv/bin/python` inside the repo, not system Python. Use absolute paths everywhere. Relative paths break silently.
+Once connected, the AI gets these tools automatically:
+- `search_memory` — semantic search across your vault
+- `store` — save facts/decisions (engine auto-classifies into the right memory tier)
+- `read_vault_file` — read any vault document
+- `list_vault` — browse available notes
+- `list_skills` — browse the cross-AI skill catalog
+- `read_skill` — load one skill from the registry
+- `resolve_skills` — recommend the right skills for a task or runtime
+- `bootstrap_agent` — load full context or recover after compaction (see below)
+- `update_working_set` — set the canonical active mission, priorities, and next actions
+- `record_handoff` — write a durable session checkpoint
+- `verify_vault_file` — mark a vault file as freshly verified
+- `freshness_report` — detect stale or missing operating files
+- `sync_skills` — push vault skills to all connected AI runtimes
 
-**Step 3: Test the connection**
+**MCP not connecting?** See [Troubleshooting](#mcp-troubleshooting) below.
 
-Open a new chat and ask your AI to call `bootstrap_agent`. It should respond with a startup packet from your vault. If it errors, check [MCP Troubleshooting](#mcp-troubleshooting) below.
+### Option B — Network MCP via Streamable HTTP (NAS / Multi-Machine)
 
-**Tools the AI gets automatically:**
+**Why this exists**: stdio requires the MCP server to run on the same machine as the AI.
+If you have a NAS or home server, run one Command Center instance and connect every machine on your network to the same vault. One memory. Shared everywhere.
 
-| Tool | What it does |
-|------|-------------|
-| `search_memory` | Semantic search across your entire vault |
-| `store` | Save facts/decisions — engine auto-routes to the right memory tier |
-| `read_vault_file` | Read any Markdown file from the vault |
-| `list_vault` | Browse all available notes |
-| `bootstrap_agent` | **Compaction recovery** — load full context after a reset (see below) |
-| `list_skills` | Browse available AI skills |
-| `read_skill` | Load a skill's instructions |
-| `resolve_skills` | Get skill recommendations for a task |
-| `update_working_set` | Update the active mission and priorities |
-| `record_handoff` | Write a session checkpoint |
-| `sync_skills` | Push vault skills to all connected AI runtimes |
-
-### Option B — Network MCP (NAS / Multi-Machine)
-
-Run one Command Center on a NAS or home server and connect every machine on your network to the same vault. One memory. Shared everywhere.
-
-**On your server:**
+**On your NAS/server:**
 ```bash
 OMNI_MCP_KEY=your_secret_token \
 OMNI_VAULT_PATH=/path/to/vault \
+OMNI_ENGINE_URL=http://127.0.0.1:8765 \
 python engine/mcp_server.py --transport http --port 8766
 ```
 
-**On each client** (`~/.claude/settings.json`):
+**On every client machine** (`~/.claude/settings.json`):
 ```json
 {
   "mcpServers": {
     "command-center": {
-      "url": "http://YOUR_SERVER_IP:8766/mcp",
+      "url": "http://YOUR_NAS_IP:8766/mcp",
       "headers": { "Authorization": "Bearer your_secret_token" }
     }
   }
 }
 ```
 
-### Option C — REST API (Scripts, bots, custom integrations)
+> **Security**: The engine already has role-based Bearer tokens (read/write/admin). Add `OMNI_MCP_KEY` for the MCP HTTP layer too. Keep the engine on `localhost` — only the MCP server needs to be LAN-accessible.
+
+### Option C — REST API (For scripts and bots)
 
 ```bash
-# Semantic search
+# Start engine
+python engine/omniscience.py start
+
+# Search your vault
 curl -X POST "http://127.0.0.1:8765/search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "my architecture decisions", "k": 5}'
+  -d '{"query": "my trading strategy", "k": 5}'
 
 # Store a memory
 curl -X POST "http://127.0.0.1:8765/capture" \
   -H "Content-Type: application/json" \
-  -d '{"content": "Decided to use FastAPI over Flask for the main API"}'
+  -d '{"content": "User prefers Python over Node for data pipelines"}'
 ```
 
 ---
 
 ## MCP Troubleshooting
 
-MCP connection issues are almost always one of these:
+The five most common failure modes:
 
-**1. Wrong Python path**
-The `command` must point to the Python inside the repo's virtual environment, not system Python.
+**1. Wrong Python** — `command` must point to `.venv/bin/python` inside the repo, not system Python.
 ```bash
-# Find the right path
-which python  # wrong — this is system python
-ls /path/to/Command-Center-AI/.venv/bin/python  # this is correct
+ls /path/to/Command-Center-AI/.venv/bin/python  # this is what you need
 ```
 
-**2. Relative paths**
-Every path in the MCP config must be absolute. `./vault` or `~/Command-Center-AI` will silently fail on some clients.
+**2. Relative paths** — every path in the MCP config must be absolute. `~/` and `./` break silently on some clients.
 
-**3. Engine not running**
-The MCP server talks to the engine on port 8765. If the engine isn't running, tools will fail.
+**3. Engine not running** — the MCP server talks to the engine on port 8765. Check first:
 ```bash
-python engine/omniscience.py status   # check
-python engine/omniscience.py start    # start if needed
-python engine/omniscience.py doctor   # full health check
+python engine/omniscience.py status
+python engine/omniscience.py doctor
 ```
 
-**4. Config file location varies by AI**
-- Claude Code: `~/.claude/settings.json`
-- Claude Desktop (Linux): `~/.config/claude/claude_desktop_config.json`
-- Claude Desktop (Mac): `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Cursor / Zed: check their respective MCP docs
+**4. Config file location varies by AI** — Claude Code uses `~/.claude/settings.json`, Claude Desktop uses a different path per OS, Cursor and Zed have their own locations. Check the specific tool's MCP docs.
 
-**5. Restart the AI after config changes**
-MCP servers are spawned at startup. Editing the config file requires a full restart of the AI tool, not just a new chat.
+**5. Restart required** — MCP servers are spawned at startup. Editing the config requires a full restart of the AI tool, not just a new chat.
 
 ---
 
-## Bootstrap — The Anti-Compaction Mechanism
+## Bootstrap — Surviving Compaction
 
-This is the core feature. Here's exactly what it does and why it exists.
+When a provider compacts a conversation, the AI loses all context it accumulated during the session. `bootstrap_agent` is the recovery mechanism.
 
-**The problem**: When a provider compacts a conversation, the AI loses all the context it accumulated during the session — your preferences, your active project, what was decided, what was built. It falls back to generic behavior.
+**What it does**: generates a structured startup packet from your vault in one call — your identity, active project, what was decided last session, what skills are relevant. Any AI can call it at session start or immediately after compaction to restore full context.
 
-**How bootstrap solves it**: `bootstrap_agent` is an MCP tool that generates a structured startup packet from your vault in one call. It returns:
-- Your identity files (USER, SOUL, COMPANY-SOUL)
-- Your active mission and current priorities (ACTIVE_CONTEXT)
-- The latest session checkpoint (SESSION_HANDOFF)
-- A freshness check on your core files
-- Recommended skills for your current task
-
-Any AI can call this at any time — session start, after compaction, when switching tools. The vault always has the current state. The AI is back to full context in seconds.
-
-**How to use it:**
-
-At session start — tell your AI:
+**At session start** — tell your AI:
 ```
 Call bootstrap_agent to load my context before we start.
 ```
 
-After compaction — the AI detects it lost context, calls:
+**After compaction** — the AI calls:
 ```
 bootstrap_agent(agent="Claude", reason="compact_recovery")
 ```
 
-When switching AI tools — same call, different agent name. Same vault. Same context.
-
-**For developers**: Add bootstrap to your AI's system prompt or CLAUDE.md as a startup instruction:
+**Add it to your CLAUDE.md** for automatic behavior:
 ```
-At the start of every session, call bootstrap_agent to load context from Command Center.
+At the start of every session, call bootstrap_agent to load context.
 If the conversation compacts, call bootstrap_agent again to recover.
 ```
+
+The vault always has the current state. The memory was never in the conversation — compaction can't touch it.
 
 ---
 
@@ -276,71 +249,77 @@ If the conversation compacts, call bootstrap_agent again to recover.
 
 ```
 vault/
-├── Core/                    ← Identity layer — fill these in once
-│   ├── USER.md              ← Who you are: background, preferences, tech stack
-│   ├── SOUL.md              ← AI behavior: tone, directives, what to always/never do
-│   └── COMPANY-SOUL.md      ← Project/org context: mission, active work, stack
-│
-├── Archive/                 ← Memory tiers
-│   ├── MEMORY.md            ← Long-term: preferences, decisions, permanent directives
-│   └── short/               ← Short-term: active tasks, project state (30-day TTL)
-│
-├── Cache/                   ← Session noise — cleared nightly automatically
-│
-├── Knowledge/               ← Your notes, research, strategies (always searchable)
-│
-├── Skills/                  ← AI skill registry (available to all connected AIs)
-│
-└── Templates/               ← Note templates for consistent formatting
+├── Core/
+│   ├── USER.md             ← Who you are (fill this in)
+│   ├── SOUL.md             ← AI identity & behavior rules (fill this in)
+│   └── COMPANY-SOUL.md     ← Organization/project mission (fill this in)
+├── Knowledge/              ← Your domain notes (strategies, docs, research)
+├── Skills/                 ← AI skill registry (available to all connected AIs)
+└── Archive/
+    └── MEMORY.md           ← Auto-captured facts and decisions
 ```
 
-**Start here**: Fill in `Core/USER.md`, `Core/SOUL.md`, and `Core/COMPANY-SOUL.md`. Everything else populates automatically as you and your AI work.
+The three Core files are your foundation. Fill them in once and every AI session starts with full context.
 
 ---
 
-## How Memory Works
+## App Mode (Background Process)
 
-The AI calls `store("content")`. Command Center does the rest — no manual classification.
+```bash
+python engine/omniscience.py start --vault ./vault   # Start in background
+python engine/omniscience.py status                   # Check status
+python engine/omniscience.py logs --lines 50          # View logs
+python engine/omniscience.py stop                     # Stop
+python engine/omniscience.py doctor                   # Health check
+python engine/omniscience.py sync-skills              # Push skills to all AI runtimes
+```
 
-| Tier | Location | Lifetime | What ends up here |
-|------|----------|----------|-------------------|
-| **long_term** | `Archive/MEMORY.md` | Forever | Preferences, decisions, directives ("always use Python", "decided on FastAPI") |
-| **short_term** | `Archive/short/` | 30 days | Active tasks, project state, in-progress work |
-| **cache** | `Cache/` | Nightly purge | Session greetings, one-off questions, ephemeral notes |
+---
 
-The classifier (`engine/memory_classifier.py`) uses content patterns to route automatically:
-- `"remember this"`, `"never forget"`, `"from now on"` → long_term
-- `"working on"`, `"current task"`, `"this sprint"` → short_term
-- Greetings, quick questions, `"show me"` → cache
-- When in doubt → short_term (better to keep than lose)
+## Obsidian — The Intended Interface
+
+**[Install Obsidian](https://obsidian.md) (free), open the `vault/` folder as a vault.** Not the repo root — the `vault/` subfolder.
+
+The repo ships a complete `.obsidian/` config inside `vault/` with everything pre-wired:
+
+| What's included | What it does |
+|---|---|
+| `HOME.md` | Dashboard landing page — live memory stats via Dataview, quick links to all core files |
+| `ARCHITECTURE.canvas` | Visual diagram of the full system: vault → engine → MCP → AI tools |
+| `snippets/command-center.css` | Electric blue accent (#00d4ff), custom callout types per memory tier, Dataview table polish |
+| `graph.json` | Color groups tuned for the vault: Core=cyan, Archive=violet, Knowledge=green |
+| `bookmarks.json` | HOME.md and ARCHITECTURE.canvas pinned in the sidebar |
+| `Templates/` | Note templates for Knowledge entries and Decision Logs |
+
+Dataview (MIT) is bundled — no plugin installation needed. Open the vault and it works.
+
+> The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
 
 ---
 
 ## Skills — Universal Across All AIs
 
-Add a Markdown file to `vault/Skills/` and every connected AI can access it via `list_skills` and `read_skill`. Skills are prompt libraries — playbooks, best practices, domain knowledge — that any AI can load on demand.
-
-Each AI runtime has its own native format for skills. Command Center syncs them automatically:
+Add a Markdown file to `vault/Skills/` and every connected AI can access it. Sync skills to each AI's native format automatically:
 
 ```bash
-python engine/omniscience.py sync-skills         # push to all runtimes
-python engine/omniscience.py sync-skills --runtime claude   # one runtime
-python engine/omniscience.py sync-skills --dry-run          # preview
-python engine/omniscience.py sync-skills --list             # see all skills
+python engine/omniscience.py sync-skills                     # all runtimes
+python engine/omniscience.py sync-skills --runtime claude    # one runtime
+python engine/omniscience.py sync-skills --dry-run           # preview
+python engine/omniscience.py sync-skills --list              # list all skills
 ```
 
-Runtimes: `claude` (`~/.claude/skills/`), `gemini` (`~/.gemini/skills/`), `codex` (`~/.codex/skills/`), `custom-ai` (workspace).
+Supported runtimes: `claude` (`~/.claude/skills/`), `gemini` (`~/.gemini/skills/`), `codex` (`~/.codex/skills/`), `custom-ai`.
 
 ---
 
 ## Migrating to a New Machine
 
 ```bash
-# 1. Copy the entire Command-Center-AI folder to the new machine
-# 2. On the new machine:
+# 1. Copy the entire Command-Center-AI folder (vault/ included)
+# 2. On new machine:
 bash setup.sh
 python engine/omniscience.py start
-# Done. LanceDB rebuilds the vector index from Markdown in seconds.
+# Done. LanceDB rebuilds from Markdown in seconds.
 ```
 
 Or put it on a USB drive. Runs anywhere Python runs.
@@ -349,7 +328,7 @@ Or put it on a USB drive. Runs anywhere Python runs.
 
 ## Migrating from Other AI Tools
 
-Bring your ChatGPT or Claude history into the vault:
+Bring your existing AI conversation history into the vault:
 
 ```bash
 # ChatGPT export (Settings → Export data → conversations.json)
@@ -359,83 +338,129 @@ python scripts/migrate_openai.py --input ~/Downloads/conversations.json
 python -m migration claude --input ~/Downloads/claude-export/
 ```
 
-This extracts your decisions, projects, and preferences from conversation history and writes structured Markdown into `vault/Migration/` — ready for semantic search.
+Extracts decisions, preferences, and project context from your conversation history and writes structured Markdown into `vault/Migration/` — ready for semantic search.
 
 ---
 
-## Architecture
+## Memory Tiers — How Storage Works
 
-| Component | Role |
-|-----------|------|
-| `vault/` | Source of truth — plain Markdown, readable by humans and AIs alike |
-| `engine/engine.py` | Watches vault, builds LanceDB index, serves search API on port 8765 |
-| `engine/memory_classifier.py` | Auto-routes stored memories to the right tier — no LLM needed, ~1ms |
-| `engine/mcp_server.py` | Exposes vault as MCP tools (stdio + HTTP transports) |
-| `engine/skill_adapter.py` | Syncs vault skills to each AI runtime's native format |
-| `engine/context_state.py` | Reads/writes ACTIVE_CONTEXT, SESSION_HANDOFF, FRESHNESS |
-| `engine/omniscience.py` | CLI launcher: start/stop/status/doctor/logs/sync-skills |
-| `engine/nightly_maintenance.py` | Nightly cache purge + short-term TTL + state bootstrap |
-| `.lancedb/` | Auto-generated vector index — never edit manually, always rebuilt from vault |
+Command Center stores memory in three tiers automatically. You never classify manually — the engine's classifier reads the content and decides.
 
-**Key decisions:**
-- Markdown is the source of truth. LanceDB is the search index — disposable, always rebuildable.
-- The AI never picks the memory tier. The classifier does it based on content.
-- Engine only listens on `127.0.0.1`. Nothing reaches your vault from the internet directly.
-- Two MCP transports: stdio for local (zero config), HTTP for network (NAS/LAN).
+| Tier | Location | TTL | What goes here |
+|------|----------|-----|----------------|
+| **cache** | `vault/Cache/session-YYYY-MM-DD.md` | Cleared nightly | Greetings, one-off questions, session noise |
+| **short_term** | `vault/Archive/short/YYYY-MM-DD.md` | 30 days | Active tasks, project state, in-progress work |
+| **long_term** | `vault/Archive/MEMORY.md` | Never expires | Preferences, decisions, identity rules, directives |
 
----
+**How classification works** (`engine/memory_classifier.py`):
+- Force keywords override everything: `"remember this"`, `"never forget"`, `"permanent"` → always long_term
+- Long-term signals: `always`, `never`, `decided`, `from now on`, `my wallet`, `tech stack`
+- Short-term signals: `working on`, `current task`, `blocked`, `this sprint`, `backtest result`
+- Cache signals: greetings, `just checking`, `show me`, `today`
+- No signal → short_term (better to keep than lose)
 
-## Engine Commands
-
-```bash
-python engine/omniscience.py start     # Start engine in background
-python engine/omniscience.py stop      # Stop engine
-python engine/omniscience.py status    # Check if running
-python engine/omniscience.py doctor    # Full health check
-python engine/omniscience.py logs      # View recent logs
-python engine/omniscience.py sync-skills  # Sync skills to all AI runtimes
-```
+**The AI calls `store("content")` — classifier routes it. That's the whole interface.**
 
 ---
 
 ## Nightly Maintenance
 
-Auto-runs every night to keep memory clean:
+Auto-cleanup and health checks every night (prevents memory bloat):
 
 ```bash
-bash engine/install_nightly_timer.sh  # install systemd timer (Linux)
+chmod +x engine/install_nightly_timer.sh
+bash engine/install_nightly_timer.sh
 ```
 
-What it does: cache purge → short-term TTL expiry → state bootstrap → freshness snapshot → health check. Logs to `.omniscience/nightly.log`.
+What it does:
+- **Engine health check** — runs `doctor` to verify vault + index are healthy
+- **Cache purge** — deletes all files in `vault/Cache/` (session noise, not worth keeping)
+- **Short-term expiry** — removes files in `vault/Archive/short/` older than 30 days
+- **State bootstrap** — ensures operating-state files exist
+- **Freshness snapshot** — regenerates `vault/Core/FRESHNESS.md`
+- Logs everything to `.omniscience/nightly.log`
 
 ---
 
 ## API Reference
 
 | Endpoint | Method | Description |
-|----------|--------|-------------|
+|---|---|---|
 | `/health` | GET | Engine status and vault stats |
 | `/search` | POST | Semantic search with optional namespace filter |
 | `/capture` | POST | Store a memory entry |
-| `/admin/reindex` | POST | Force full reindex |
-| `/admin/cleanup` | POST | Run cleanup |
+| `/admin/reindex` | POST | Force full reindex (admin key required) |
+| `/admin/cleanup` | POST | Run cleanup (admin key required) |
 
-Optional auth: `export OMNI_API_KEY="your-token"` then `Authorization: Bearer $OMNI_API_KEY`.
+### Auth (Optional)
+
+```bash
+export OMNI_API_KEY="your-secret-token"
+curl -H "Authorization: Bearer $OMNI_API_KEY" ...
+```
+
+For LAN/network use, split read/write/admin tokens:
+```bash
+export OMNI_API_KEYS_READ="read_token"
+export OMNI_API_KEYS_WRITE="write_token"
+export OMNI_API_KEYS_ADMIN="admin_token"
+```
+
+---
+
+## Architecture
+
+| Component | Why | What |
+|---|---|---|
+| `vault/` | Human-readable, Obsidian-native | Markdown source of truth |
+| `engine/engine.py` | One process for index + API | Watches vault, embeds, serves search |
+| `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
+| `engine/context_state.py` | Compaction resilience | Reads/writes ACTIVE_CONTEXT, SESSION_HANDOFF, FRESHNESS |
+| `engine/skill_adapter.py` | Universal skills | Syncs vault skills to each AI runtime's native format |
+| `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
+| `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/sync-skills |
+| `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
+
+**Key design decisions:**
+- **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
+- **The AI never picks the memory tier** — `memory_classifier.py` does it based on content patterns.
+- **Vault is air-gapped** — engine only listens on `127.0.0.1`. Nothing from the internet reaches your memory directly.
+- **Role-based auth** — separate Bearer tokens for read/write/admin.
+- **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs on a NAS and serves any machine on your LAN.
+
+- **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
+- **Vector DB**: LanceDB — embedded, disk-based, no server needed
+- **API**: FastAPI on `localhost:8765`
+
+---
+
+## Scripts
+
+`scripts/` contains standalone tools that work alongside the engine.
+
+- **`scripts/migrate_openai.py`** — Import ChatGPT history into the vault
+- **`scripts/browser_test.py`** — Example of giving your AI a real browser via `browser-use`
+
+```bash
+ANTHROPIC_API_KEY=your_key .venv/bin/python scripts/browser_test.py
+```
+
+> Add your own scripts here. Keep personal/sensitive scripts in subdirectories listed in `.gitignore`.
 
 ---
 
 ## Contributing
 
-**This project solves a real problem that affects every serious AI user.** Contributions that make it better, easier to set up, or more universal are very welcome.
+**Contributions welcome.** This project solves a real problem for every serious AI user — the more runtimes, migration parsers, and adapters it supports, the more useful it becomes for everyone.
 
 Good places to start:
-- **More migration parsers** — Gemini export, Grok export, generic JSON format
-- **More AI runtime adapters** — if your AI tool has a skill/context format, add an adapter
-- **Better MCP setup UX** — anything that makes the initial connection less painful
-- **Obsidian theme improvements** — the vault has a custom CSS theme, improvements welcome
-- **Documentation** — if something confused you during setup, a PR fixing it helps everyone
+- Migration parsers for Gemini, Grok, and generic JSON export formats
+- AI runtime adapters for new tools
+- MCP setup improvements and better error messages
+- Obsidian theme and template contributions
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
