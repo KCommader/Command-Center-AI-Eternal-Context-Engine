@@ -26,13 +26,13 @@ CATEGORY_META: dict[str, dict] = {
         "callout": "ai-bots",
         "label": "AI / Bots / Automation",
         "themes": ["Claude", "MCP", "Command Center", "automation", "agents",
-                   "n8n", "Kaizen", "AI council", "Dragonfruit", "local AI"],
+                   "n8n", "Kaizen", "local AI", "vector search", "memory"],
     },
     "NFTs / Web3": {
         "callout": "web3",
         "label": "NFTs / Web3",
         "themes": ["Crypto Kennel Club", "CKC", "smart contract", "DAO",
-                   "Solidity", "OpenSea", "KAIJU SYNDICATE trademark", "DePIN"],
+                   "Solidity", "OpenSea", "NFT marketplace", "DePIN"],
     },
     "Flutter / Mobile": {
         "callout": "flutter",
@@ -55,8 +55,7 @@ CATEGORY_META: dict[str, dict] = {
     "Business / Brand": {
         "callout": "business",
         "label": "Business / Brand",
-        "themes": ["KAIJU SYNDICATE", "Antigravity", "dropshipping", "SmartKitchenZone",
-                   "brand identity", "trademark", "revenue model"],
+        "themes": ["dropshipping", "ecommerce", "brand identity", "trademark", "revenue model"],
     },
     "Writing / Creative": {
         "callout": "creative",

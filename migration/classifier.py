@@ -1,7 +1,7 @@
 """
 Keyword-based conversation classifier.
 
-Default categories are tuned for KAIJU SYNDICATE projects.
+Default categories cover common project types.
 Customize by passing your own categories dict to Classifier().
 
 Categories dict format:
@@ -24,7 +24,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
         "dex", "swap", "yield", "staking", "prediction market", "token", "altcoin",
         "market maker", "order book", "liquidate", "antigravity", "orderflow",
         "price action", "ltr", "liquidity trap", "fvg", "bos", "avwap",
-        "coreflow", "kaiju trading", "kaiju fund",
+        "coreflow", "trading bot", "algo trading",
     ],
     "AI / Bots / Automation": [
         "openai", "gpt", "claude", "llm", "langchain", "ai agent", "chatbot",
@@ -61,7 +61,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
     ],
     "Business / Brand": [
         "shopify", "ecommerce", "dropshipping", "revenue model", "business plan",
-        "startup", "pricing strategy", "kaiju syndicate", "brand identity",
+        "startup", "pricing strategy", "brand identity",
         "trademark", "marketing", "content strategy", "youtube channel",
         "affiliate", "monetiz", "saas",
     ],

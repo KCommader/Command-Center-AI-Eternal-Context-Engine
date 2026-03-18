@@ -17,9 +17,9 @@ Use it before ending a session or after finishing a meaningful chunk of work.
 ## Usage
 ```text
 record_handoff(
-  summary="Polymarket bot is live on oracle-lag only and idle by design until a valid edge appears.",
-  next_actions=["Check fills after the next valid signal"],
-  changed_files=["Trading Bots/kaiju_pro/kaiju_poly.py"],
-  risks=["No external sports odds provider configured yet"]
+  summary="Auth service refactored to use short-lived tokens. All tests passing.",
+  next_actions=["Deploy to staging", "Monitor token refresh rate"],
+  changed_files=["src/auth/token_service.py", "tests/test_auth.py"],
+  risks=["Redis session store not yet load-tested under high concurrency"]
 )
 ```
