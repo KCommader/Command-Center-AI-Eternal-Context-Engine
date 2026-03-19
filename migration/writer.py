@@ -66,7 +66,7 @@ CATEGORY_META: dict[str, dict] = {
     "Personal / General": {
         "callout": "personal",
         "label": "Personal / General",
-        "themes": ["Puerto Rico", "homestead", "garden", "credit strategy",
+        "themes": ["homestead", "garden", "credit strategy",
                    "resume", "legal docs", "fermentation"],
     },
     "DevOps / Infra": {
