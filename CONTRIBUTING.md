@@ -5,6 +5,7 @@ Command Center solves a problem that affects every serious AI user — context l
 ## What's Needed
 
 ### High impact
+- **Native frontend** — Obsidian is the current interface but it's a third-party tool. A native web UI (or desktop app) that shows the knowledge graph, manages vault files, displays memory tiers, and gives full visibility into session state would be a massive step forward. Graph-like, local-first, no cloud.
 - **Migration parsers** — `migration/parsers/` has OpenAI and Claude. Gemini, Grok/xAI, and a generic JSON format are missing. Each parser is ~100 lines.
 - **AI runtime adapters** — `engine/skill_adapter.py` has Claude, Gemini, Codex, OpenClaw. If your AI tool has a skill/context format, add a subclass.
 - **MCP setup UX** — the initial connection is the hardest step. A setup wizard, a `doctor --fix` command, or better error messages would help a lot of people.
@@ -16,6 +17,9 @@ Command Center solves a problem that affects every serious AI user — context l
 
 ### Documentation
 If something confused you during setup, a PR fixing it helps everyone who comes after you. The MCP troubleshooting section especially benefits from real-world cases.
+
+### Anything else
+The list above is a starting point, not a boundary. If you've built something that makes AI memory more permanent, more portable, or more reliable — or if you've solved a problem we haven't thought of yet — open an issue and show it.
 
 ## How to Submit
 
