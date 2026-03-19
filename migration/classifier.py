@@ -22,7 +22,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
         "eth", "ethereum", "defi", "blockchain", "wallet", "solana",
         "arbitrage", "liquidation", "leverage", "futures", "perp", "perpetual",
         "dex", "swap", "yield", "staking", "prediction market", "token", "altcoin",
-        "market maker", "order book", "liquidate", "antigravity", "orderflow",
+        "market maker", "order book", "liquidate", "orderflow",
         "price action", "ltr", "liquidity trap", "fvg", "bos", "avwap",
         "coreflow", "trading bot", "algo trading",
     ],
@@ -82,7 +82,7 @@ DEFAULT_CATEGORIES: dict[str, list[str]] = {
         "data pipeline", "etl", "scraping", "beautifulsoup",
     ],
     "Personal / General": [
-        "puerto rico", "personal advice", "life advice", "relationship",
+        "personal advice", "life advice", "relationship",
         "resume", "salary", "budget", "travel", "food recipe",
         "cook", "what is", "how does", "explain",
     ],
