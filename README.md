@@ -232,6 +232,35 @@ Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agen
 
 ---
 
+## Configuration
+
+All settings live in `vault/config.yaml` — a human-readable file that ships pre-configured with sensible defaults. Open it in any text editor or directly in Obsidian.
+
+```yaml
+search:
+  mode: balanced          # strict | balanced | exploratory
+  bm25_enabled: true      # keyword search alongside vector
+  rerank_enabled: true    # CrossEncoder reranking
+  query_expansion: true   # expand queries with vault vocabulary
+
+chunking:
+  max_chars: 1500
+  min_chars: 80
+
+memory:
+  classifier_mode: regex  # regex | llm | hybrid
+  store_rate_limit: 30    # writes per minute per agent
+  store_dedup_threshold: 0.92
+
+privacy:
+  private_namespaces:
+    - local_only           # vault/Local/ — never shown to cloud AIs
+```
+
+Environment variables (`OMNI_*`) always override `config.yaml`. The YAML file is the human layer; env vars are for automation, Docker, and CI.
+
+---
+
 ## Privacy & Safety
 
 Command Center is built around a simple principle: **your data, your rules.**

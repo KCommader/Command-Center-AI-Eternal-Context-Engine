@@ -104,6 +104,15 @@ def cmd_start(args: argparse.Namespace) -> int:
         print(f"Vault path not found: {vault}")
         return 1
 
+    # Apply vault/config.yaml before spawning — the subprocess inherits these
+    # env vars, so OMNI_* constants in engine.py pick them up at import time.
+    try:
+        sys.path.insert(0, str(ENGINE_SCRIPT.parent))
+        from config import apply_yaml_config
+        apply_yaml_config(vault)
+    except Exception:
+        pass  # YAML config is optional — fall through to env vars / defaults
+
     cmd = [
         args.python,
         str(ENGINE_SCRIPT),

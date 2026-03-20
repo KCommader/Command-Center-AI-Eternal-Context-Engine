@@ -1,0 +1,66 @@
+# ECE Configuration
+# ------------------
+# Human-readable settings for the Eternal Context Engine.
+# Environment variables (OMNI_*) always take priority over this file.
+# Uncomment and change any value to override the default.
+#
+# Full reference: github.com/KCommader/Command-Center-AI-Eternal-Context-Engine
+
+# ── Search ─────────────────────────────────────────────────────────────────
+search:
+  # Default search mode: strict | balanced | exploratory
+  mode: balanced
+
+  # BM25 keyword search — finds exact token matches that vector may miss
+  bm25_enabled: true
+  bm25_candidates: 40   # how many BM25-only candidates to fetch per query
+
+  # CrossEncoder reranker — rescores merged vector + BM25 candidates
+  # This is a small neural model (~44MB) that scores every candidate against
+  # your query. Not a generative LLM — pure scoring, fast, runs fully local.
+  # Upgrade option: BAAI/bge-reranker-base (~278MB, best quality/size ratio)
+  rerank_enabled: true
+  rerank_model: cross-encoder/ms-marco-MiniLM-L-12-v2
+  rerank_candidates: 36
+
+  # Query expansion — appends related vocab terms before searching
+  query_expansion_enabled: true
+  query_expansion_terms: 5
+
+# ── Chunking ───────────────────────────────────────────────────────────────
+chunking:
+  max_chars: 1500   # max characters per chunk (section splits here)
+  min_chars: 80     # chunks smaller than this are discarded
+
+# ── Memory ─────────────────────────────────────────────────────────────────
+memory:
+  # Classifier mode for store() routing:
+  #   regex  — fast, deterministic, default (no extra deps)
+  #   llm    — local Ollama fallback for nuanced content (requires Ollama)
+  #   hybrid — regex first, LLM for low-confidence results
+  classifier_mode: regex
+
+  # Store rate limit: max writes per minute per agent (0 = disabled)
+  store_rate_limit: 30
+
+  # Dedup threshold: skip storing content this similar to existing (0 = disabled)
+  store_dedup_threshold: 0.92
+
+# ── Privacy ────────────────────────────────────────────────────────────────
+privacy:
+  # Namespaces excluded from all default searches.
+  # vault/Local/ is always local_only. Add your own private zones here.
+  private_namespaces:
+    - local_only
+  # Examples:
+  #   - diary
+  #   - medical
+  #   - financial
+
+# ── Advanced ───────────────────────────────────────────────────────────────
+# advanced:
+#   api_port: 8765
+#   api_host: 127.0.0.1
+#   query_cache_ttl_sec: 3600
+#   query_cache_max_items: 256
+#   rerank_batch_size: 16
