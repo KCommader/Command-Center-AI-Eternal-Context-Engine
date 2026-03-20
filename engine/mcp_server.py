@@ -74,6 +74,16 @@ from pathlib import Path
 
 import httpx
 
+# Optional HTTP transport deps — imported at module level so FastAPI can
+# resolve all type annotations properly (local imports break Pydantic forward refs).
+try:
+    from fastapi import FastAPI, Request, HTTPException
+    from fastapi.responses import JSONResponse
+    import uvicorn
+    _HTTP_TRANSPORT_AVAILABLE = True
+except ImportError:
+    _HTTP_TRANSPORT_AVAILABLE = False
+
 sys.path.insert(0, str(Path(__file__).parent))
 from memory_classifier import classify, write_to_tier, MemoryTier
 from context_state import (
@@ -1389,11 +1399,7 @@ async def run_http(port: int) -> None:
       HTTP lets one Command Center instance serve every machine on your network.
       One vault. One memory. Accessible from laptop, desktop, and agents alike.
     """
-    try:
-        from fastapi import FastAPI, Request, HTTPException
-        from fastapi.responses import JSONResponse
-        import uvicorn
-    except ImportError:
+    if not _HTTP_TRANSPORT_AVAILABLE:
         print(
             "ERROR: HTTP transport requires fastapi and uvicorn.\n"
             "Install with: pip install fastapi uvicorn",
