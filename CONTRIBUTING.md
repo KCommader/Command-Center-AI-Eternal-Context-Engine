@@ -30,6 +30,10 @@ The list above is a starting point, not a boundary. If you've built something th
 
 No formal review process yet — if it works, doesn't break existing behavior, and solves a real problem, it goes in.
 
+## Contributor License Agreement (CLA)
+
+By opening a pull request you agree to the CLA in [LICENSE](LICENSE): you assign copyright of your contribution to KCommander. This is required to maintain dual-licensing rights and is standard practice for dual-licensed open source projects (MySQL, Qt, etc.). Your contribution stays open source — this just ensures the licensing model can be sustained.
+
 ## Principles
 
 - **Keep it lean** — Command Center is intentionally simple. Resist adding complexity that only helps edge cases.
