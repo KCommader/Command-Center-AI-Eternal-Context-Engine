@@ -3,6 +3,7 @@
 <img src="assets/logo.png" alt="Command Center AI" width="720" />
 
 ### Eternal Memory for Any AI — Local, Private, Portable
+#### Eternal Context Engine (ECE)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=flat-square&logo=python)](https://python.org)
 [![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP-purple?style=flat-square)](https://modelcontextprotocol.io)
@@ -49,6 +50,7 @@ Your Notes (Markdown)  →  Vault (Obsidian Graph View)
 - **AI searches your vault** via MCP or REST API — gets relevant context instantly
 - **Visualize your knowledge** in Obsidian's Graph View as it grows
 - **Migrate in 60 seconds** — copy folder, reinstall deps, reindex
+- **Multi-agent ready** — shared vault for all agents, private namespaces per agent. Claude, Grok, Gemini, and any other AI can run simultaneously off the same vault without stepping on each other's memory
 
 ---
 
