@@ -5,11 +5,14 @@ Omniscience Thin Launcher
 Small wrapper to run Omniscience Engine like an app.
 
 Commands:
-  start   Start background engine process
-  stop    Stop background engine process
-  status  Show process status
-  doctor  Validate local setup
-  logs    Show recent log output
+  start            Start background engine process
+  stop             Stop background engine process
+  status           Show process status
+  doctor           Validate local setup
+  logs             Show recent log output
+  watchdog-start   Start engine watchdog in background
+  watchdog-stop    Stop the watchdog
+  watchdog-status  Show watchdog status
 """
 
 from __future__ import annotations
@@ -296,6 +299,106 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_watchdog_start(args: argparse.Namespace) -> int:
+    """Start the watchdog in the background."""
+    pid_file = RUNTIME_DIR / "watchdog.pid"
+    if pid_file.exists():
+        try:
+            existing_pid = int(pid_file.read_text().strip())
+            if _is_process_running(existing_pid):
+                print(f"Watchdog already running (pid={existing_pid})")
+                return 0
+        except Exception:
+            pass
+
+    watchdog_script = Path(__file__).resolve().with_name("watchdog.py")
+    if not watchdog_script.exists():
+        print(f"Watchdog script not found: {watchdog_script}")
+        return 1
+
+    _ensure_runtime_dir()
+    log_path = RUNTIME_DIR / "watchdog.log"
+    with log_path.open("a", encoding="utf-8") as logf:
+        popen_kwargs: dict[str, Any] = {
+            "cwd": str(ROOT),
+            "stdout": logf,
+            "stderr": subprocess.STDOUT,
+        }
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = (
+                getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            )
+        else:
+            popen_kwargs["start_new_session"] = True
+
+        proc = subprocess.Popen([args.python, str(watchdog_script), "run"], **popen_kwargs)
+
+    time.sleep(0.5)
+    if proc.poll() is not None:
+        print("Watchdog failed to start.")
+        return 1
+
+    print(f"Watchdog started (pid={proc.pid})")
+    print(f"Log: {log_path}")
+    return 0
+
+
+def cmd_watchdog_stop(_: argparse.Namespace) -> int:
+    """Stop the running watchdog."""
+    pid_file = RUNTIME_DIR / "watchdog.pid"
+    if not pid_file.exists():
+        print("Watchdog is not running (no pid file).")
+        return 0
+
+    try:
+        pid = int(pid_file.read_text().strip())
+    except Exception:
+        print("Could not read watchdog pid file.")
+        pid_file.unlink(missing_ok=True)
+        return 1
+
+    if not _is_process_running(pid):
+        print("Watchdog already stopped (stale pid file removed).")
+        pid_file.unlink(missing_ok=True)
+        return 0
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        _wait_for_exit(pid, 5.0)
+        pid_file.unlink(missing_ok=True)
+        print(f"Watchdog stopped (pid={pid}).")
+    except Exception as exc:
+        print(f"Failed to stop watchdog: {exc}")
+        return 1
+
+    return 0
+
+
+def cmd_watchdog_status(_: argparse.Namespace) -> int:
+    """Show whether the watchdog is running."""
+    pid_file = RUNTIME_DIR / "watchdog.pid"
+    if not pid_file.exists():
+        print("watchdog: stopped")
+        return 0
+
+    try:
+        pid = int(pid_file.read_text().strip())
+    except Exception:
+        print("watchdog: stopped (unreadable pid file)")
+        return 0
+
+    if _is_process_running(pid):
+        log_path = RUNTIME_DIR / "watchdog.log"
+        print(f"watchdog: running (pid={pid})")
+        print(f"log: {log_path}")
+    else:
+        print("watchdog: stopped (stale pid file)")
+        pid_file.unlink(missing_ok=True)
+
+    return 0
+
+
 def cmd_sync_skills(args: argparse.Namespace) -> int:
     from engine.skill_adapter import (
         sync_skills, import_from_runtimes, list_skills_table,
@@ -352,6 +455,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs = sub.add_parser("logs", help="Show engine logs")
     p_logs.add_argument("--lines", type=int, default=60, help="Number of log lines")
     p_logs.set_defaults(func=cmd_logs)
+
+    # watchdog subcommands
+    p_wd_start = sub.add_parser("watchdog-start", help="Start engine watchdog in background")
+    p_wd_start.add_argument("--python", default=sys.executable, help="Python executable")
+    p_wd_start.set_defaults(func=cmd_watchdog_start)
+
+    p_wd_stop = sub.add_parser("watchdog-stop", help="Stop the engine watchdog")
+    p_wd_stop.set_defaults(func=cmd_watchdog_stop)
+
+    p_wd_status = sub.add_parser("watchdog-status", help="Show watchdog status")
+    p_wd_status.set_defaults(func=cmd_watchdog_status)
 
     p_sync = sub.add_parser("sync-skills", help="Sync vault/Skills/ to all AI runtimes")
     p_sync.add_argument(
