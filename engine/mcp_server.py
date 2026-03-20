@@ -61,8 +61,6 @@ The AI never decides the tier — the engine's classifier does.
   python engine/mcp_server.py --transport http --port 8766
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import os
@@ -103,7 +101,7 @@ from context_state import (
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "command-center"
-SERVER_VERSION = "1.4.0"
+SERVER_VERSION = "1.9.0"
 
 ENGINE_URL = os.environ.get("OMNI_ENGINE_URL", "http://127.0.0.1:8765")
 ENGINE_API_KEY = os.environ.get("OMNI_API_KEY", "")

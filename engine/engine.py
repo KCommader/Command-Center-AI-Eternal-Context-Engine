@@ -1499,7 +1499,7 @@ class VaultWatcher(FileSystemEventHandler):
 
 # ─── FastAPI Server ───────────────────────────────────────────────────────────
 def create_app(engine: OmniscienceEngine) -> FastAPI:
-    app = FastAPI(title="Omniscience Engine", version="1.4.0")
+    app = FastAPI(title="Omniscience Engine", version="1.9.0")
 
     auth_cfg = load_auth_config()
     token_roles = build_token_roles(auth_cfg)
@@ -1679,7 +1679,7 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         _log(_agent_name(authorization, x_agent_name), "/policy/grounding")
         return JSONResponse(
             {
-                "version": "1.4.0",
+                "version": "1.9.0",
                 "rules": [
                     "Use only returned evidence chunks as factual basis.",
                     "If verdict is not grounded, explicitly say evidence is insufficient.",

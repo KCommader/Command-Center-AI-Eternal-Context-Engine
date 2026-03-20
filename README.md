@@ -136,20 +136,28 @@ Once connected, the AI gets these tools automatically:
 - `freshness_report` — show when each core context file was last updated
 - `sync_skills` — sync vault skills to any connected AI runtime (Claude, Gemini, Codex)
 
-### Option B — Network MCP via Streamable HTTP (NAS / Multi-Machine)
+### Option B — Network MCP via HTTP (NAS / Multi-Machine)
 
 **Why this exists**: stdio requires the MCP server to run on the same machine as the AI.
 If you have a NAS or home server, run one Command Center instance and connect every machine on your network to the same vault. One memory. Shared everywhere.
 
 **On your NAS/server:**
 ```bash
-OMNI_MCP_KEY=your_secret_token \
-OMNI_VAULT_PATH=/path/to/vault \
-OMNI_ENGINE_URL=http://127.0.0.1:8765 \
-python engine/mcp_server.py --transport http --port 8766
+# Start the engine
+python engine/omniscience.py start
+
+# Start the MCP HTTP server (managed background process)
+python engine/omniscience.py mcp-start --key your_secret_token
 ```
 
-**On every client machine** (`~/.claude/settings.json`):
+**Generate the client config automatically:**
+```bash
+python engine/omniscience.py setup-ai --http YOUR_NAS_IP
+```
+
+This prints the exact JSON to paste into any AI client. If `OMNI_MCP_KEY` is set, the Bearer token appears in the snippet automatically.
+
+**Or configure manually** (`~/.claude/settings.json`):
 ```json
 {
   "mcpServers": {
@@ -161,7 +169,15 @@ python engine/mcp_server.py --transport http --port 8766
 }
 ```
 
-> **Security**: The engine already has role-based Bearer tokens (read/write/admin). Add `OMNI_MCP_KEY` for the MCP HTTP layer too. Keep the engine on `localhost` — only the MCP server needs to be LAN-accessible.
+**HTTPS** — use [Caddy](https://caddyserver.com) or nginx as a reverse proxy for automatic TLS:
+```
+myvault.yourdomain.com {
+  reverse_proxy localhost:8766
+}
+```
+Then update your AI config URL to `https://myvault.yourdomain.com/mcp`.
+
+> **Security**: The engine already has role-based Bearer tokens (read/write/admin). Add `--key` for the MCP HTTP layer too. Keep the engine on `localhost` — only the MCP server needs to be LAN-accessible.
 
 ### Option C — REST API (For scripts and bots)
 
@@ -291,11 +307,22 @@ Two safeguards prevent AI agents from polluting your vault:
 ### Manual (default)
 
 ```bash
+# Engine
 python engine/omniscience.py start --vault ./vault   # Start in background
 python engine/omniscience.py status                   # Check status
 python engine/omniscience.py logs --lines 50          # View logs
 python engine/omniscience.py stop                     # Stop
 python engine/omniscience.py doctor                   # Health check
+
+# MCP HTTP server (for NAS / network access)
+python engine/omniscience.py mcp-start               # Start MCP server (port 8766)
+python engine/omniscience.py mcp-status               # Check MCP server
+python engine/omniscience.py mcp-stop                 # Stop MCP server
+
+# Watchdog (auto-restarts engine on crash)
+python engine/omniscience.py watchdog-start           # Start watchdog
+python engine/omniscience.py watchdog-status           # Check watchdog
+python engine/omniscience.py watchdog-stop             # Stop watchdog
 ```
 
 ### Docker
@@ -337,7 +364,7 @@ Engine starts on boot, restarts on crash, logs to journald. No Docker overhead �
 | `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
 | `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
 | `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
-| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/sync-skills |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/mcp-start/mcp-stop/watchdog-start/sync-skills/setup-ai |
 | `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
 | `engine/context_state.py` | Anti-compaction | Reads/writes SESSION_HANDOFF, ACTIVE_CONTEXT, FRESHNESS — bootstrap recovery packet |
 | `engine/skill_adapter.py` | Universal skills | Syncs vault/Skills/ to Claude, Gemini, Codex, Custom AI native formats |
