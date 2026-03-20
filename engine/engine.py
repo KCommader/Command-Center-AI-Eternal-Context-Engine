@@ -54,6 +54,16 @@ from sentence_transformers import CrossEncoder, SentenceTransformer
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+# BM25 — optional but strongly recommended. Installed via requirements.txt.
+# When present, search_with_grounding retrieves candidates from both vector
+# and keyword paths, then merges before the reranker sees them.
+try:
+    from rank_bm25 import BM25Okapi as _BM25Okapi
+    _BM25_AVAILABLE = True
+except ImportError:
+    _BM25_AVAILABLE = False
+    _BM25Okapi = None  # type: ignore[assignment,misc]
+
 # Memory tier classifier (local module)
 try:
     from memory_classifier import classify, write_to_tier, MemoryTier
@@ -101,6 +111,12 @@ RERANK_MODEL_NAME = os.getenv("OMNI_RERANK_MODEL_NAME", "cross-encoder/ms-marco-
 RERANK_CANDIDATES = int(os.getenv("OMNI_RERANK_CANDIDATES", "36"))
 RERANK_BATCH_SIZE = int(os.getenv("OMNI_RERANK_BATCH_SIZE", "16"))
 ENFORCE_ANSWER_CONTRACT_DEFAULT = _env_flag("OMNI_ENFORCE_ANSWER_CONTRACT", True)
+
+# ── BM25 hybrid search ────────────────────────────────────────────────────────
+# Vector retrieval is strong on semantics; BM25 is strong on exact keywords.
+# Combining both before the reranker gives the best of both paths.
+BM25_ENABLED = _env_flag("OMNI_BM25_ENABLED", True)
+BM25_CANDIDATES = int(os.getenv("OMNI_BM25_CANDIDATES", "40"))  # BM25-only candidates to fetch
 
 STOPWORDS = {
     "a",
@@ -327,6 +343,13 @@ class OmniscienceEngine:
         else:
             print("   Reranker disabled by config.\n")
 
+        # BM25 index — built lazily after first index_all() or vault change.
+        # _bm25_dirty flags that the corpus has changed and needs a rebuild
+        # before the next search. This avoids rebuilding on every file event.
+        self._bm25: Any = None
+        self._bm25_ids: list[str] = []
+        self._bm25_dirty: bool = True
+
         self.db = lancedb.connect(self.db_path)
         self.table = self._ensure_table()
 
@@ -422,6 +445,73 @@ class OmniscienceEngine:
 
     def _invalidate_query_cache(self) -> None:
         self._query_cache.clear()
+        self._bm25_dirty = True  # corpus may have changed — rebuild before next search
+
+    # ── BM25 hybrid index ──────────────────────────────────────────────────────
+
+    def _rebuild_bm25_index(self) -> None:
+        """Build a BM25 index from all chunks currently in LanceDB.
+
+        Called lazily before the first search after any vault change. For
+        personal vaults (~hundreds to low thousands of chunks) this takes
+        under a second. The index lives in memory only — nothing written to disk.
+        """
+        if not BM25_ENABLED or not _BM25_AVAILABLE:
+            return
+        try:
+            df = self.table.to_pandas()[["id", "text"]]
+            if df.empty:
+                return
+            corpus = [list(self._tokenize_for_overlap(str(t))) for t in df["text"]]
+            self._bm25_ids = df["id"].tolist()
+            self._bm25 = _BM25Okapi(corpus)
+        except Exception as exc:
+            print(f"   ⚠️  BM25 index build failed ({exc})")
+            self._bm25 = None
+            self._bm25_ids = []
+
+    def _ensure_bm25_fresh(self) -> None:
+        """Rebuild the BM25 index if the corpus has changed since the last build."""
+        if self._bm25_dirty:
+            self._rebuild_bm25_index()
+            self._bm25_dirty = False
+
+    def _bm25_candidate_ids(self, query: str, k: int) -> list[str]:
+        """Return chunk IDs of the top-k BM25 matches for query.
+
+        Only returns IDs with a BM25 score above zero — chunks with no
+        query term overlap are excluded regardless of k.
+        """
+        if self._bm25 is None or not self._bm25_ids:
+            return []
+        tokens = list(self._tokenize_for_overlap(query))
+        if not tokens:
+            return []
+        scores = self._bm25.get_scores(tokens)
+        top_k = min(k, len(scores))
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        return [self._bm25_ids[i] for i in ranked if scores[i] > 0]
+
+    def _fetch_by_ids(self, ids: list[str]) -> list[dict[str, Any]]:
+        """Fetch rows from LanceDB by chunk ID.
+
+        Used to hydrate BM25-only candidates that the vector search didn't
+        retrieve. These rows carry no _distance value — they're tagged as
+        bm25-sourced so downstream filters treat them correctly.
+        """
+        if not ids:
+            return []
+        try:
+            id_set = set(ids)
+            cols = ["id", "path", "chunk_index", "text", "tags", "namespace", "source", "indexed_at"]
+            df = self.table.to_pandas()[cols]
+            rows = df[df["id"].isin(id_set)].to_dict("records")
+            for row in rows:
+                row["_distance"] = None       # no vector distance — BM25-sourced
+                row["_retrieval_source"] = "bm25"
+            return rows
+        except Exception:
+            return []
 
     def _trim_log_file(self) -> None:
         if not self.log_file.exists():
@@ -583,6 +673,11 @@ class OmniscienceEngine:
         self._cleanup_runtime_files()
         print(f"\n✅ Done. {len(files)} files → {total} chunks in LanceDB.\n")
         self._update_dashboard(len(files), total)
+        # Build BM25 index now while the full corpus is warm in memory.
+        # _invalidate_query_cache already set _bm25_dirty, but we build eagerly
+        # here so the first search after startup doesn't pay the build cost.
+        self._rebuild_bm25_index()
+        self._bm25_dirty = False
 
     def _row_matches_filters(
         self,
@@ -764,16 +859,32 @@ class OmniscienceEngine:
         rows = (
             self.table.search(vec)
             .limit(fetch_k)
-            .select(["path", "chunk_index", "text", "tags", "namespace", "source", "indexed_at", "_distance"])
+            .select(["id", "path", "chunk_index", "text", "tags", "namespace", "source", "indexed_at", "_distance"])
             .to_list()
         )
+        for row in rows:
+            row.setdefault("_retrieval_source", "vector")
+
+        # ── BM25 augmentation ─────────────────────────────────────────────────
+        # Fetch candidates the keyword path finds but vector may have missed.
+        # These go through the same reranker — quality is sorted there, not here.
+        if BM25_ENABLED and _BM25_AVAILABLE:
+            self._ensure_bm25_fresh()
+            bm25_ids = self._bm25_candidate_ids(query, BM25_CANDIDATES)
+            if bm25_ids:
+                vec_id_set = {r.get("id") for r in rows if r.get("id")}
+                extra_ids = [i for i in bm25_ids if i not in vec_id_set]
+                if extra_ids:
+                    rows = rows + self._fetch_by_ids(extra_ids)
 
         filtered: list[dict[str, Any]] = []
         for row in rows:
             if not self._row_matches_filters(row, ns_set, ex_set, tag_set, path_prefix):
                 continue
             similarity = self._distance_to_similarity(row.get("_distance"))
-            if similarity < sim_floor:
+            # BM25-sourced rows carry no vector distance. Let them through the
+            # similarity floor — the reranker decides their final rank.
+            if similarity < sim_floor and row.get("_retrieval_source") != "bm25":
                 continue
 
             row_terms = self._tokenize_for_overlap(str(row.get("text", "")))
@@ -953,6 +1064,8 @@ class OmniscienceEngine:
             "reranker_enabled": bool(self.reranker is not None),
             "reranker_model": RERANK_MODEL_NAME if self.reranker is not None else None,
             "rerank_candidates": RERANK_CANDIDATES,
+            "bm25_enabled": BM25_ENABLED and _BM25_AVAILABLE,
+            "bm25_corpus_size": len(self._bm25_ids),
             "trusted_namespaces": sorted(TRUSTED_NAMESPACES),
             "low_trust_namespaces": sorted(LOW_TRUST_NAMESPACES),
         }
