@@ -13,6 +13,10 @@ Commands:
   watchdog-start   Start engine watchdog in background
   watchdog-stop    Stop the watchdog
   watchdog-status  Show watchdog status
+  mcp-start        Start MCP HTTP server in background (for NAS / network)
+  mcp-stop         Stop the MCP HTTP server
+  mcp-status       Show MCP server status
+  setup-ai         Write MCP config for Claude Code, Desktop, Cursor, or Zed
 """
 
 from __future__ import annotations
@@ -30,11 +34,15 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 ENGINE_SCRIPT = Path(__file__).resolve().with_name("engine.py")
+MCP_SCRIPT = Path(__file__).resolve().with_name("mcp_server.py")
 RUNTIME_DIR = ROOT / ".omniscience"
 STATE_FILE = RUNTIME_DIR / "state.json"
 LOG_FILE = RUNTIME_DIR / "engine.log"
+MCP_STATE_FILE = RUNTIME_DIR / "mcp.json"
+MCP_LOG_FILE = RUNTIME_DIR / "mcp.log"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+DEFAULT_MCP_PORT = 8766
 DEFAULT_VAULT = ROOT / "vault"
 
 
@@ -460,6 +468,133 @@ def cmd_watchdog_status(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp_start(args: argparse.Namespace) -> int:
+    """Start MCP HTTP server as a background process (NAS / network mode)."""
+    state = json.loads(MCP_STATE_FILE.read_text()) if MCP_STATE_FILE.exists() else None
+    if state and _is_process_running(int(state.get("pid", 0))):
+        print(f"MCP server already running (pid={state['pid']})")
+        print(f"MCP endpoint: http://0.0.0.0:{state.get('port', DEFAULT_MCP_PORT)}/mcp")
+        return 0
+
+    if not MCP_SCRIPT.exists():
+        print(f"MCP server script not found: {MCP_SCRIPT}")
+        return 1
+
+    vault = Path(args.vault).resolve()
+    port = args.port
+    python = args.python
+
+    env = os.environ.copy()
+    env["OMNI_VAULT_PATH"] = str(vault)
+    env["OMNI_ENGINE_URL"] = f"http://127.0.0.1:{DEFAULT_PORT}"
+    if args.key:
+        env["OMNI_MCP_KEY"] = args.key
+
+    cmd = [python, str(MCP_SCRIPT), "--transport", "http", "--port", str(port)]
+
+    _ensure_runtime_dir()
+    with MCP_LOG_FILE.open("a", encoding="utf-8") as logf:
+        logf.write(f"\n\n=== MCP START {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n")
+        logf.write("CMD: " + " ".join(cmd) + "\n")
+        logf.flush()
+
+        popen_kwargs: dict[str, Any] = {
+            "cwd": str(ROOT),
+            "stdout": logf,
+            "stderr": subprocess.STDOUT,
+            "env": env,
+        }
+        if os.name == "nt":
+            popen_kwargs["creationflags"] = (
+                getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            )
+        else:
+            popen_kwargs["start_new_session"] = True
+
+        proc = subprocess.Popen(cmd, **popen_kwargs)
+
+    time.sleep(0.8)
+    if proc.poll() is not None:
+        print("MCP server failed to start. Check logs:")
+        print(f"  {MCP_LOG_FILE}")
+        return 1
+
+    mcp_state = {
+        "pid": proc.pid,
+        "started_at": time.time(),
+        "port": port,
+        "vault": str(vault),
+        "log": str(MCP_LOG_FILE),
+    }
+    _ensure_runtime_dir()
+    MCP_STATE_FILE.write_text(json.dumps(mcp_state, indent=2), encoding="utf-8")
+
+    print(f"MCP server started (pid={proc.pid})")
+    print(f"MCP endpoint: http://0.0.0.0:{port}/mcp")
+    print(f"Auth: {'enabled (OMNI_MCP_KEY set)' if args.key else 'open — pass --key to secure'}")
+    print(f"Log: {MCP_LOG_FILE}")
+    print()
+    print("Connect any AI on your network by adding this to its MCP config:")
+    print(f'  "url": "http://YOUR_IP:{port}/mcp"')
+    if args.key:
+        print(f'  "headers": {{"Authorization": "Bearer {args.key}"}}')
+    return 0
+
+
+def cmd_mcp_stop(_: argparse.Namespace) -> int:
+    """Stop the running MCP HTTP server."""
+    if not MCP_STATE_FILE.exists():
+        print("MCP server is not running (no state file).")
+        return 0
+
+    try:
+        state = json.loads(MCP_STATE_FILE.read_text())
+    except Exception:
+        MCP_STATE_FILE.unlink(missing_ok=True)
+        return 0
+
+    pid = int(state.get("pid", 0))
+    if not _is_process_running(pid):
+        print("MCP server already stopped (stale state removed).")
+        MCP_STATE_FILE.unlink(missing_ok=True)
+        return 0
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        _wait_for_exit(pid, 5.0)
+        MCP_STATE_FILE.unlink(missing_ok=True)
+        print(f"MCP server stopped (pid={pid}).")
+    except Exception as exc:
+        print(f"Failed to stop MCP server: {exc}")
+        return 1
+    return 0
+
+
+def cmd_mcp_status(_: argparse.Namespace) -> int:
+    """Show MCP HTTP server status."""
+    if not MCP_STATE_FILE.exists():
+        print("mcp: stopped")
+        return 0
+
+    try:
+        state = json.loads(MCP_STATE_FILE.read_text())
+    except Exception:
+        print("mcp: stopped (unreadable state file)")
+        return 0
+
+    pid = int(state.get("pid", 0))
+    if _is_process_running(pid):
+        port = state.get("port", DEFAULT_MCP_PORT)
+        print(f"mcp: running (pid={pid})")
+        print(f"endpoint: http://0.0.0.0:{port}/mcp")
+        print(f"log: {state.get('log', MCP_LOG_FILE)}")
+    else:
+        print("mcp: stopped (stale state removed)")
+        MCP_STATE_FILE.unlink(missing_ok=True)
+    return 0
+
+
 def cmd_sync_skills(args: argparse.Namespace) -> int:
     from engine.skill_adapter import (
         sync_skills, import_from_runtimes, list_skills_table,
@@ -554,7 +689,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--vault", default=str(DEFAULT_VAULT), metavar="PATH",
         help="Absolute path to the vault directory",
     )
+    p_setup.add_argument(
+        "--http", metavar="HOST_OR_IP",
+        help="Generate network/NAS config pointing to this IP (e.g. 192.168.1.10 or myvault.local)",
+    )
+    p_setup.add_argument(
+        "--mcp-port", type=int, default=DEFAULT_MCP_PORT, metavar="PORT",
+        help=f"MCP HTTP port to use in the generated config (default: {DEFAULT_MCP_PORT})",
+    )
     p_setup.set_defaults(func=cmd_setup_ai)
+
+    # MCP HTTP server management
+    p_mcp_start = sub.add_parser("mcp-start", help="Start MCP HTTP server in background (NAS / network)")
+    p_mcp_start.add_argument("--vault", default=str(DEFAULT_VAULT), help="Vault path")
+    p_mcp_start.add_argument("--port", type=int, default=DEFAULT_MCP_PORT, help=f"MCP port (default: {DEFAULT_MCP_PORT})")
+    p_mcp_start.add_argument("--key", default=os.environ.get("OMNI_MCP_KEY", ""), help="Bearer token (auth)")
+    p_mcp_start.add_argument("--python", default=sys.executable, help="Python executable")
+    p_mcp_start.set_defaults(func=cmd_mcp_start)
+
+    p_mcp_stop = sub.add_parser("mcp-stop", help="Stop the MCP HTTP server")
+    p_mcp_stop.set_defaults(func=cmd_mcp_stop)
+
+    p_mcp_status = sub.add_parser("mcp-status", help="Show MCP HTTP server status")
+    p_mcp_status.set_defaults(func=cmd_mcp_status)
 
     return parser
 
@@ -567,15 +724,50 @@ def cmd_setup_ai(args: argparse.Namespace) -> int:
     vault = Path(args.vault).resolve()
     mcp_script = (root / "engine" / "mcp_server.py").as_posix()
     runtime = args.runtime
+    http_host = getattr(args, "http", None)
+    mcp_port = getattr(args, "mcp_port", DEFAULT_MCP_PORT)
 
+    # ── Network / NAS mode ────────────────────────────────────────────────────
+    if http_host:
+        mcp_url = f"http://{http_host}:{mcp_port}/mcp"
+        network_block: dict = {"url": mcp_url}
+        mcp_key = os.environ.get("OMNI_MCP_KEY", "")
+        if mcp_key:
+            network_block["headers"] = {"Authorization": f"Bearer {mcp_key}"}
+
+        snippet = _json.dumps({"mcpServers": {"command-center": network_block}}, indent=2)
+        print("── Network / NAS MCP config ─────────────────────────────────────────")
+        print()
+        print("Paste this into your AI client's MCP config (settings.json / mcp.json):")
+        print()
+        print(snippet)
+        print()
+        if not mcp_key:
+            print("Tip: set OMNI_MCP_KEY on the server for auth, then re-run this command")
+            print("     and the Bearer token will appear in the snippet automatically.")
+            print()
+        print("On your NAS / server, start the MCP HTTP server:")
+        print(f"  python engine/omniscience.py mcp-start --port {mcp_port}")
+        print()
+        print("HTTPS (recommended for internet access):")
+        print("  Use Caddy or nginx as a reverse proxy in front of the MCP port.")
+        print("  Caddy example (automatic TLS):")
+        print(f"    myvault.yourdomain.com {{")
+        print(f"      reverse_proxy localhost:{mcp_port}")
+        print(f"    }}")
+        print()
+        print("  Then update your AI config url to: https://myvault.yourdomain.com/mcp")
+        return 0
+
+    # ── Local stdio mode ──────────────────────────────────────────────────────
     mcp_block = {
         "mcpServers": {
             "command-center": {
-                "command": "python",
+                "command": sys.executable,
                 "args": [mcp_script],
                 "env": {
                     "OMNI_VAULT_PATH": vault.as_posix(),
-                    "OMNI_ENGINE_URL": "http://127.0.0.1:8765",
+                    "OMNI_ENGINE_URL": f"http://127.0.0.1:{DEFAULT_PORT}",
                 },
             }
         }
