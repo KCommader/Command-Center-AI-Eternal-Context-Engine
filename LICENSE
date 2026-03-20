@@ -1,21 +1,67 @@
-MIT License
+Command Center AI — Dual License
+Copyright (c) 2026 KCommander. All rights reserved.
 
-Copyright (c) 2026 KCommander
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 1 — GNU AFFERO GENERAL PUBLIC LICENSE v3 (AGPL-3.0)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software is free to use, modify, and distribute under the terms
+of the GNU Affero General Public License version 3, as published by
+the Free Software Foundation.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Under the AGPL, if you modify this software or build a product or
+service on top of it — including running it as a hosted or networked
+service others connect to — you must:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+  1. Make your full source code available under the AGPL.
+  2. Include this license and all copyright notices.
+  3. Clearly attribute the original work to KCommander.
+
+The full text of the AGPL-3.0 is available at:
+https://www.gnu.org/licenses/agpl-3.0.txt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPTION 2 — COMMERCIAL LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If you do not wish to comply with the AGPL — for example, because
+you want to:
+
+  - Use this software in a proprietary or closed-source product
+  - Run it as a commercial SaaS or hosted service
+  - Distribute it without open-sourcing your modifications
+  - Use it in a product without AGPL attribution requirements
+
+...you must obtain a separate commercial license from KCommander.
+
+To inquire about commercial licensing:
+  GitHub: https://github.com/KCommader
+  Repo:   https://github.com/KCommader/Command-Center-AI-Eternal-Context-Engine
+
+Commercial licenses are negotiated individually and grant you the
+right to use, integrate, and distribute this software under terms
+agreed upon in writing with KCommander.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTRIBUTOR LICENSE AGREEMENT (CLA)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+By submitting a pull request or contribution to this repository, you
+agree that:
+
+  1. You assign copyright of your contribution to KCommander.
+  2. KCommander may license your contribution under any license,
+     including commercial licenses, at their sole discretion.
+  3. You have the right to make this assignment (i.e., the code is
+     yours to give).
+
+This CLA is required to preserve dual-licensing rights. Without it,
+commercial licensing would not be legally possible.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Free use (personal, research, open source):  AGPL-3.0 applies.
+  Commercial / proprietary use:                Contact KCommander.
+  All copyright:                               KCommander, 2026.
