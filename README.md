@@ -244,40 +244,32 @@ python engine/omniscience.py doctor                   # Health check
 
 ---
 
-## Obsidian — The Intended Interface
+## Architecture
 
-**[Install Obsidian](https://obsidian.md) (free), open the `vault/` folder as a vault.** Not the repo root — the `vault/` subfolder.
+| Component | Why | What |
+|---|---|---|
+| `vault/` | Human-readable, Obsidian-native | Markdown source of truth |
+| `engine/engine.py` | One process for index + API | Watches vault, embeds, serves search |
+| `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
+| `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
+| `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/sync-skills |
+| `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
+| `engine/context_state.py` | Anti-compaction | Reads/writes SESSION_HANDOFF, ACTIVE_CONTEXT, FRESHNESS — bootstrap recovery packet |
+| `engine/skill_adapter.py` | Universal skills | Syncs vault/Skills/ to Claude, Gemini, Codex, OpenClaw native formats |
+| `engine/watchdog.py` | Engine resilience | Monitors /health, auto-restarts the engine on crash or timeout |
 
-The repo ships a complete `.obsidian/` config inside `vault/` with everything pre-wired:
+**Key design decisions:**
+- **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
+- **The AI never picks the memory tier** — `memory_classifier.py` does it based on content patterns. Keeps memory clean without requiring the AI to make judgment calls.
+- **Vault is air-gapped** — engine only listens on `127.0.0.1`. Nothing from the internet reaches your memory directly. Even browser automation results flow through you before anything gets stored.
+- **Role-based auth** — separate Bearer tokens for read/write/admin. Give each agent only the access it needs.
+- **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs the server on a NAS and serves any machine on your LAN from one vault.
 
-| What's included | What it does |
-|---|---|
-| `HOME.md` | Dashboard landing page — live memory stats via Dataview, quick links to all core files |
-| `ARCHITECTURE.canvas` | Visual diagram of the full system: vault → engine → MCP → AI tools |
-| `snippets/command-center.css` | Electric blue accent (#00d4ff), custom callout types per memory tier, Dataview table polish |
-| `graph.json` | Color groups tuned for the vault: Core=blue, Archive=purple, Knowledge=green |
-| `bookmarks.json` | HOME.md and ARCHITECTURE.canvas pinned in the sidebar |
-| `Templates/` | Note templates for Knowledge entries and Decision Logs |
-
-**First thing to do after opening the vault:** Install the [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) community plugin (Settings → Community plugins → Browse → "Dataview"). HOME.md uses it for live memory queries — without it, queries show as code blocks.
-
-> The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
-
----
-
-## Screenshots
-
-<div align="center">
-
-![Command Center — Dashboard + Graph View](assets/screenshots/command-center-dual.png)
-
-*HOME.md dashboard alongside the live knowledge graph — your memory growing in real time.*
-
-| Dashboard (HOME.md) | Knowledge Graph |
-|---|---|
-| ![Dashboard](assets/screenshots/home-dashboard.png) | ![Graph View](assets/screenshots/graph-view.png) |
-
-</div>
+- **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
+- **Vector DB**: LanceDB — embedded, disk-based, no server needed
+- **API**: FastAPI on `localhost:8765`
+- **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)
 
 ---
 
@@ -406,34 +398,6 @@ export OMNI_API_KEYS_ADMIN="admin_token"
 
 ---
 
-## Architecture
-
-| Component | Why | What |
-|---|---|---|
-| `vault/` | Human-readable, Obsidian-native | Markdown source of truth |
-| `engine/engine.py` | One process for index + API | Watches vault, embeds, serves search |
-| `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
-| `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
-| `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
-| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/sync-skills |
-| `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
-| `engine/context_state.py` | Anti-compaction | Reads/writes SESSION_HANDOFF, ACTIVE_CONTEXT, FRESHNESS — bootstrap recovery packet |
-| `engine/skill_adapter.py` | Universal skills | Syncs vault/Skills/ to Claude, Gemini, Codex, OpenClaw native formats |
-
-**Key design decisions:**
-- **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
-- **The AI never picks the memory tier** — `memory_classifier.py` does it based on content patterns. Keeps memory clean without requiring the AI to make judgment calls.
-- **Vault is air-gapped** — engine only listens on `127.0.0.1`. Nothing from the internet reaches your memory directly. Even browser automation results flow through you before anything gets stored.
-- **Role-based auth** — separate Bearer tokens for read/write/admin. Give each agent only the access it needs.
-- **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs the server on a NAS and serves any machine on your LAN from one vault.
-
-- **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
-- **Vector DB**: LanceDB — embedded, disk-based, no server needed
-- **API**: FastAPI on `localhost:8765`
-- **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)
-
----
-
 ## Scripts
 
 `scripts/` contains standalone tools and examples that work alongside the engine but aren't part of the core memory system.
@@ -447,6 +411,43 @@ export OMNI_API_KEYS_ADMIN="admin_token"
   Swap the task string for anything: check prices, read dashboards, monitor pages. Uses Claude Haiku by default (cheapest). Change to `claude-sonnet-4-6` or `claude-opus-4-6` for harder tasks.
 
 > Add your own scripts here. Keep personal/sensitive scripts in subdirectories listed in `.gitignore`.
+
+---
+
+## Obsidian — The Intended Interface
+
+**[Install Obsidian](https://obsidian.md) (free), open the `vault/` folder as a vault.** Not the repo root — the `vault/` subfolder.
+
+The repo ships a complete `.obsidian/` config inside `vault/` with everything pre-wired:
+
+| What's included | What it does |
+|---|---|
+| `HOME.md` | Dashboard landing page — live memory stats via Dataview, quick links to all core files |
+| `ARCHITECTURE.canvas` | Visual diagram of the full system: vault → engine → MCP → AI tools |
+| `snippets/command-center.css` | Electric blue accent (#00d4ff), custom callout types per memory tier, Dataview table polish |
+| `graph.json` | Color groups tuned for the vault: Core=blue, Archive=purple, Knowledge=green |
+| `bookmarks.json` | HOME.md and ARCHITECTURE.canvas pinned in the sidebar |
+| `Templates/` | Note templates for Knowledge entries and Decision Logs |
+
+**First thing to do after opening the vault:** Install the [Dataview](https://blacksmithgu.github.io/obsidian-dataview/) community plugin (Settings → Community plugins → Browse → "Dataview"). HOME.md uses it for live memory queries — without it, queries show as code blocks.
+
+> The vault is plain Markdown. Everything works without Obsidian. But the graph view watching your memory grow in real time is the whole experience.
+
+---
+
+## Screenshots
+
+<div align="center">
+
+![Command Center — Dashboard + Graph View](assets/screenshots/command-center-dual.png)
+
+*HOME.md dashboard alongside the live knowledge graph — your memory growing in real time.*
+
+| Dashboard (HOME.md) | Knowledge Graph |
+|---|---|
+| ![Dashboard](assets/screenshots/home-dashboard.png) | ![Graph View](assets/screenshots/graph-view.png) |
+
+</div>
 
 ---
 
