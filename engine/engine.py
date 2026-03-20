@@ -122,6 +122,14 @@ ENFORCE_ANSWER_CONTRACT_DEFAULT = _env_flag("OMNI_ENFORCE_ANSWER_CONTRACT", True
 BM25_ENABLED = _env_flag("OMNI_BM25_ENABLED", True)
 BM25_CANDIDATES = int(os.getenv("OMNI_BM25_CANDIDATES", "40"))  # BM25-only candidates to fetch
 
+# ── Query expansion ───────────────────────────────────────────────────────────
+# Before searching, expand the query with semantically related terms from the
+# vault's own vocabulary. This catches cases where the user's wording doesn't
+# match the stored text at all — neither vector nor BM25 can help without it.
+# Uses the embedding model (no LLM, no cloud call, no extra dependency).
+QUERY_EXPANSION_ENABLED = _env_flag("OMNI_QUERY_EXPANSION_ENABLED", True)
+QUERY_EXPANSION_TERMS = int(os.getenv("OMNI_QUERY_EXPANSION_TERMS", "5"))
+
 STOPWORDS = {
     "a",
     "an",
@@ -549,6 +557,10 @@ class OmniscienceEngine:
         # Store safety: per-source rate limit windows and dedup state.
         self._store_rate_window: dict[str, list[float]] = {}
 
+        # Query expansion: vocabulary embedding index — built alongside BM25.
+        self._vocab_tokens: list[str] = []
+        self._vocab_embeddings: Any = None  # numpy array (n_tokens, embed_dim)
+
         self.db = lancedb.connect(self.db_path)
         self.table = self._ensure_table()
 
@@ -670,9 +682,10 @@ class OmniscienceEngine:
             self._bm25_ids = []
 
     def _ensure_bm25_fresh(self) -> None:
-        """Rebuild the BM25 index if the corpus has changed since the last build."""
+        """Rebuild BM25 + vocab indexes if the corpus has changed since last build."""
         if self._bm25_dirty:
             self._rebuild_bm25_index()
+            self._rebuild_vocab_index()
             self._bm25_dirty = False
 
     def _bm25_candidate_ids(self, query: str, k: int) -> list[str]:
@@ -711,6 +724,87 @@ class OmniscienceEngine:
             return rows
         except Exception:
             return []
+
+    # ── Query expansion ──────────────────────────────────────────────────────
+
+    def _rebuild_vocab_index(self) -> None:
+        """Build a vocabulary embedding index from all unique tokens in the vault.
+
+        Each token that appears in the indexed corpus gets embedded once. The
+        result is a small matrix: (n_tokens, embed_dim). On query, we embed
+        the query, find the nearest tokens in this matrix, and append them to
+        the query string. This catches vocabulary mismatches that neither
+        vector search nor BM25 can solve alone.
+
+        Built lazily alongside the BM25 index — same trigger, same lifecycle.
+        """
+        if not QUERY_EXPANSION_ENABLED:
+            return
+        try:
+            df = self.table.to_pandas()["text"]
+            # Collect unique tokens from the corpus
+            all_tokens: set[str] = set()
+            for text in df:
+                all_tokens |= self._tokenize_for_overlap(str(text))
+            # Filter to meaningful tokens (length > 3, not stopwords)
+            vocab = sorted(t for t in all_tokens if len(t) > 3 and t not in STOPWORDS)
+            if not vocab:
+                self._vocab_tokens = []
+                self._vocab_embeddings = None
+                return
+            # Cap at 5000 to keep embedding time reasonable
+            if len(vocab) > 5000:
+                vocab = vocab[:5000]
+            self._vocab_tokens = vocab
+            self._vocab_embeddings = self.embed(vocab)
+        except Exception as exc:
+            print(f"   ⚠️  Vocab index build failed ({exc})")
+            self._vocab_tokens = []
+            self._vocab_embeddings = None
+
+    def _expand_query(self, query: str) -> str:
+        """Expand a query with semantically related terms from the vault vocabulary.
+
+        Embeds the query, finds the N nearest tokens in the vocabulary index,
+        and appends them to the original query. The expanded query is used for
+        both vector search and BM25 — broadening recall from both paths.
+
+        Returns the expanded query string. If expansion is disabled or the
+        vocabulary is empty, returns the original query unchanged.
+        """
+        if (
+            not QUERY_EXPANSION_ENABLED
+            or not self._vocab_tokens
+            or self._vocab_embeddings is None
+        ):
+            return query
+
+        try:
+            import numpy as np
+
+            q_vec = np.array(self.embed([query])[0])
+            v_mat = np.array(self._vocab_embeddings)
+            # Cosine similarity: dot product of normalized vectors
+            q_norm = q_vec / (np.linalg.norm(q_vec) + 1e-9)
+            v_norms = v_mat / (np.linalg.norm(v_mat, axis=1, keepdims=True) + 1e-9)
+            sims = v_norms @ q_norm
+
+            query_tokens = self._tokenize_for_overlap(query)
+            top_indices = np.argsort(sims)[::-1]
+            expansion_terms: list[str] = []
+            for idx in top_indices:
+                if len(expansion_terms) >= QUERY_EXPANSION_TERMS:
+                    break
+                token = self._vocab_tokens[idx]
+                # Don't add tokens already in the query
+                if token not in query_tokens:
+                    expansion_terms.append(token)
+
+            if expansion_terms:
+                return query + " " + " ".join(expansion_terms)
+        except Exception:
+            pass
+        return query
 
     def _trim_log_file(self) -> None:
         if not self.log_file.exists():
@@ -872,10 +966,11 @@ class OmniscienceEngine:
         self._cleanup_runtime_files()
         print(f"\n✅ Done. {len(files)} files → {total} chunks in LanceDB.\n")
         self._update_dashboard(len(files), total)
-        # Build BM25 index now while the full corpus is warm in memory.
+        # Build BM25 + vocab indexes now while the full corpus is warm in memory.
         # _invalidate_query_cache already set _bm25_dirty, but we build eagerly
         # here so the first search after startup doesn't pay the build cost.
         self._rebuild_bm25_index()
+        self._rebuild_vocab_index()
         self._bm25_dirty = False
 
     def _row_matches_filters(
@@ -1057,7 +1152,12 @@ class OmniscienceEngine:
         if cached is not None:
             return cached
 
-        vec = self.embed([query])[0]
+        # ── Query expansion ─────────────────────────────────────────────────
+        # Expand the query with semantically related terms from the vault's
+        # own vocabulary. Broadens recall for both vector and BM25 paths.
+        expanded_query = self._expand_query(query)
+
+        vec = self.embed([expanded_query])[0]
         fetch_k = max(top_k * 8, 20)
 
         rows = (
@@ -1074,7 +1174,7 @@ class OmniscienceEngine:
         # These go through the same reranker — quality is sorted there, not here.
         if BM25_ENABLED and _BM25_AVAILABLE:
             self._ensure_bm25_fresh()
-            bm25_ids = self._bm25_candidate_ids(query, BM25_CANDIDATES)
+            bm25_ids = self._bm25_candidate_ids(expanded_query, BM25_CANDIDATES)
             if bm25_ids:
                 vec_id_set = {r.get("id") for r in rows if r.get("id")}
                 extra_ids = [i for i in bm25_ids if i not in vec_id_set]
@@ -1330,6 +1430,9 @@ class OmniscienceEngine:
             "private_namespaces": sorted(PRIVATE_NAMESPACES),
             "store_rate_limit": STORE_RATE_LIMIT,
             "store_dedup_threshold": STORE_DEDUP_THRESHOLD,
+            "query_expansion_enabled": QUERY_EXPANSION_ENABLED,
+            "query_expansion_terms": QUERY_EXPANSION_TERMS,
+            "vocab_size": len(self._vocab_tokens),
         }
 
     def _update_dashboard(self, file_count: int, chunk_count: int):

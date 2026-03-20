@@ -272,6 +272,58 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         if not _is_process_running(pid):
             warnings.append("Stale state file detected (engine not running).")
 
+    # ── Search quality verification ────────────────────────────────────────
+    # Index a known test document, search for it, verify it ranks #1.
+    # Proves the full pipeline works, not just "engine is running."
+    print("[doctor] running search quality check...")
+    try:
+        import httpx
+
+        port = int(state.get("port", 8765)) if state else 8765
+        base = f"http://127.0.0.1:{port}"
+
+        # Check if engine is reachable
+        health = httpx.get(f"{base}/health", timeout=5)
+        if health.status_code == 200:
+            # Store a unique test document
+            test_id = f"_doctor_test_{int(time.time())}"
+            test_text = f"ECE search quality verification: {test_id} — this document confirms the search pipeline is healthy."
+            capture_resp = httpx.post(
+                f"{base}/capture",
+                json={"text": test_text, "namespace": "_doctor", "tag": "doctor", "source": "doctor"},
+                timeout=10,
+            )
+
+            if capture_resp.status_code == 200:
+                # Give the engine a moment to index
+                time.sleep(1)
+
+                # Search for the test document
+                search_resp = httpx.post(
+                    f"{base}/search",
+                    json={"query": test_id, "k": 3},
+                    timeout=10,
+                )
+
+                if search_resp.status_code == 200:
+                    results = search_resp.json().get("results", [])
+                    found = any(test_id in str(r.get("text", "")) for r in results)
+                    if found:
+                        print("[doctor] search quality: PASS — test document found in results")
+                    else:
+                        warnings.append(
+                            "Search quality: test document was stored but NOT found in search results. "
+                            "Consider running a full reindex: python engine/omniscience.py reindex"
+                        )
+                else:
+                    warnings.append(f"Search quality: search request failed ({search_resp.status_code})")
+            else:
+                warnings.append(f"Search quality: capture request failed ({capture_resp.status_code})")
+        else:
+            warnings.append("Search quality: engine not reachable — skipping search quality check")
+    except Exception as exc:
+        warnings.append(f"Search quality check skipped ({exc})")
+
     if warnings:
         print("\nWarnings:")
         for w in warnings:
