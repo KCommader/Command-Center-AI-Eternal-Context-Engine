@@ -175,6 +175,22 @@ LOW_TRUST_NAMESPACES = _namespace_set_from_env(
     "raw_chats,chat_imports,inbox,scratch,system_runtime,dashboard_md",
 )
 
+# ── Privacy namespaces ─────────────────────────────────────────────────────────
+# Namespaces listed here are hard-excluded from all default searches.
+# vault/Local/ is always private. Add your own via OMNI_PRIVATE_NAMESPACES:
+#   OMNI_PRIVATE_NAMESPACES=local_only,diary,medical
+# Cloud AIs never see these unless a query explicitly includes the namespace.
+PRIVATE_NAMESPACES = _namespace_set_from_env(
+    "OMNI_PRIVATE_NAMESPACES",
+    "local_only",
+)
+
+# ── Store safety ───────────────────────────────────────────────────────────────
+# Rate limiter: max writes per minute per source/agent. Prevents vault flooding.
+# Dedup: skip storing content that is near-identical to something already indexed.
+STORE_RATE_LIMIT = int(os.getenv("OMNI_STORE_RATE_LIMIT", "30"))          # writes/min
+STORE_DEDUP_THRESHOLD = float(os.getenv("OMNI_STORE_DEDUP_THRESHOLD", "0.92"))  # 0.0–1.0
+
 ROLE_RANK = {"read": 1, "write": 2, "admin": 3}
 
 SCHEMA = pa.schema(
@@ -436,6 +452,12 @@ def infer_namespace(rel_path: str) -> str:
         return "company_core"
     if rel.startswith("archive/"):
         return "company_memory"
+    # vault/Local/ — private namespace, excluded from all default searches.
+    # Used for local-LLM-only content, personal notes, anything that should
+    # never reach a cloud AI. See OMNI_PRIVATE_NAMESPACES config.
+    if rel.startswith("local/"):
+        return "local_only"
+
     # Per-agent private namespaces. Files under agents/{agent_id}/ are indexed
     # under agent_{agent_id} and only surface in searches that include that
     # namespace — keeping each agent's private memory isolated from the shared vault.
@@ -523,6 +545,9 @@ class OmniscienceEngine:
         self._bm25: Any = None
         self._bm25_ids: list[str] = []
         self._bm25_dirty: bool = True
+
+        # Store safety: per-source rate limit windows and dedup state.
+        self._store_rate_window: dict[str, list[float]] = {}
 
         self.db = lancedb.connect(self.db_path)
         self.table = self._ensure_table()
@@ -1007,6 +1032,11 @@ class OmniscienceEngine:
             ex_set |= set(LOW_TRUST_NAMESPACES)
         if trusted_only:
             ex_set |= set(LOW_TRUST_NAMESPACES)
+
+        # Private namespaces (vault/Local/, user-defined via OMNI_PRIVATE_NAMESPACES)
+        # are always excluded unless the query explicitly requests them.
+        if PRIVATE_NAMESPACES and ns_set is None:
+            ex_set |= set(PRIVATE_NAMESPACES)
         if ns_set:
             ex_set -= ns_set
 
@@ -1168,8 +1198,63 @@ class OmniscienceEngine:
         )
         return payload["results"]
 
+    def _check_store_rate(self, source: str) -> bool:
+        """Return True if the source/agent is within the write rate limit."""
+        if STORE_RATE_LIMIT <= 0:
+            return True
+        now = time.time()
+        key = f"rate:{slug(source)}"
+        window = self._store_rate_window.get(key, [])
+        # Trim entries older than 60 seconds
+        window = [t for t in window if (now - t) < 60.0]
+        if len(window) >= STORE_RATE_LIMIT:
+            return False
+        window.append(now)
+        self._store_rate_window[key] = window
+        return True
+
+    def _check_store_dedup(self, text: str) -> bool:
+        """Return True if the content is sufficiently unique to store.
+
+        Runs a quick vector similarity check against existing chunks.
+        If anything scores above STORE_DEDUP_THRESHOLD, it's a duplicate.
+        """
+        if STORE_DEDUP_THRESHOLD <= 0.0 or STORE_DEDUP_THRESHOLD >= 1.0:
+            return True  # dedup disabled
+        try:
+            vec = self.embed([text])[0]
+            hits = (
+                self.table.search(vec)
+                .limit(3)
+                .select(["text", "_distance"])
+                .to_list()
+            )
+            for hit in hits:
+                sim = self._distance_to_similarity(hit.get("_distance"))
+                if sim >= STORE_DEDUP_THRESHOLD:
+                    return False  # duplicate found
+        except Exception:
+            pass  # on error, allow the write
+        return True
+
     def capture(self, req: CaptureRequest) -> dict[str, Any]:
         now_iso = datetime.utcnow().isoformat()
+
+        # ── Store safety: rate limit ───────────────────────────────────────────
+        if not self._check_store_rate(req.source):
+            return {
+                "status": "rate_limited",
+                "message": f"Exceeded {STORE_RATE_LIMIT} writes/min for source '{req.source}'. Try again shortly.",
+                "timestamp": now_iso,
+            }
+
+        # ── Store safety: dedup check ──────────────────────────────────────────
+        if not self._check_store_dedup(req.text):
+            return {
+                "status": "duplicate_skipped",
+                "message": "Content is near-identical to an existing memory. Skipped to keep vault clean.",
+                "timestamp": now_iso,
+            }
 
         # Smart tier routing: classifier decides cache / short_term / long_term
         if _CLASSIFIER_AVAILABLE and not req.file_name:
@@ -1242,6 +1327,9 @@ class OmniscienceEngine:
             "bm25_corpus_size": len(self._bm25_ids),
             "trusted_namespaces": sorted(TRUSTED_NAMESPACES),
             "low_trust_namespaces": sorted(LOW_TRUST_NAMESPACES),
+            "private_namespaces": sorted(PRIVATE_NAMESPACES),
+            "store_rate_limit": STORE_RATE_LIMIT,
+            "store_dedup_threshold": STORE_DEDUP_THRESHOLD,
         }
 
     def _update_dashboard(self, file_count: int, chunk_count: int):

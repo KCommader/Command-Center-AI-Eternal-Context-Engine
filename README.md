@@ -232,6 +232,31 @@ Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agen
 
 ---
 
+## Privacy & Safety
+
+Command Center is built around a simple principle: **your data, your rules.**
+
+### Private Namespaces — Local LLM Isolation
+
+Files in `vault/Local/` are automatically namespaced as `local_only` and **excluded from all default searches**. Cloud AIs (Claude, GPT, Gemini via API) never see them unless they explicitly request the namespace.
+
+This is designed for setups where local LLMs (Ollama, LM Studio, local Grok) handle private tasks — personal journals, health data, financial planning — while cloud AIs handle coding and general work. Same vault, complete isolation.
+
+Add your own private zones via environment variable:
+```bash
+# Everything in vault/Local/, vault/Diary/, vault/Medical/ becomes invisible to cloud AIs
+export OMNI_PRIVATE_NAMESPACES=local_only,diary,medical
+```
+
+### Store Protection — Rate Limiting & Deduplication
+
+Two safeguards prevent AI agents from polluting your vault:
+
+- **Rate limiter**: max 30 writes per minute per agent (configurable via `OMNI_STORE_RATE_LIMIT`). If an AI goes rogue and tries to flood your vault, it gets throttled automatically.
+- **Dedup check**: before writing, the engine checks if near-identical content already exists (>92% similarity). Duplicates are skipped and the AI gets a `"duplicate_skipped"` response. Keeps your vault clean across sessions. Configurable via `OMNI_STORE_DEDUP_THRESHOLD`.
+
+---
+
 ## App Mode (Background Process)
 
 ```bash
