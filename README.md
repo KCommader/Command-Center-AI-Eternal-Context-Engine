@@ -453,6 +453,26 @@ export OMNI_API_KEYS_ADMIN="admin_token"
 
 ---
 
+## Testing
+
+```bash
+# Install test dependencies
+pip install -r tests/requirements-test.txt
+
+# Run all tests
+pytest tests/
+
+# Run specific test files
+pytest tests/test_chunker.py       # Markdown chunker
+pytest tests/test_classifier.py    # Memory tier classifier
+pytest tests/test_search.py        # Search pipeline (integration)
+pytest tests/test_smoke.py         # Full pipeline lifecycle
+```
+
+Tests use a temporary vault and temporary LanceDB — nothing touches your real data. The smoke test runs the complete lifecycle (index → search → capture → dedup → grounding) in one pass.
+
+---
+
 ## Scripts
 
 `scripts/` contains standalone tools and examples that work alongside the engine but aren't part of the core memory system.
