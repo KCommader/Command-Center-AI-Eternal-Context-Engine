@@ -1,0 +1,35 @@
+# Command Center AI — systemd service
+#
+# Install:
+#   bash setup.sh --install-service
+#
+# Or manually:
+#   sudo cp engine/command-center.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable command-center
+#   sudo systemctl start command-center
+#
+# Logs:
+#   journalctl -u command-center -f
+
+[Unit]
+Description=Command Center AI — Eternal Context Engine
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/opt/command-center
+ExecStart=/opt/command-center/.venv/bin/python engine/omniscience.py start --foreground
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/command-center/vault /opt/command-center/.lancedb /opt/command-center/.omniscience
+
+[Install]
+WantedBy=multi-user.target
