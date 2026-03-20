@@ -1,0 +1,37 @@
+# Command Center AI — Docker Compose
+#
+# Usage:
+#   docker compose up -d          Start engine
+#   docker compose logs -f        Watch logs
+#   docker compose down           Stop
+#
+# Your vault and index live on the host via bind mounts.
+# Nothing is stored inside the container. Delete the container,
+# your data is still on disk exactly where you left it.
+
+services:
+  engine:
+    build: .
+    container_name: command-center
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    volumes:
+      # Mount your vault — the Markdown source of truth
+      - ./vault:/data/vault
+      # Mount the LanceDB index — auto-rebuilt if missing
+      - ./.lancedb:/data/.lancedb
+    environment:
+      - OMNI_VAULT_PATH=/data/vault
+      - OMNI_DB_DIR=/data/.lancedb
+      # Uncomment and set these for auth:
+      # - OMNI_API_KEY=your-secret-token
+      # - OMNI_API_KEYS_READ=read_token
+      # - OMNI_API_KEYS_WRITE=write_token
+      # - OMNI_API_KEYS_ADMIN=admin_token
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3

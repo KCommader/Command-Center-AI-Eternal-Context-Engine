@@ -257,7 +257,9 @@ Two safeguards prevent AI agents from polluting your vault:
 
 ---
 
-## App Mode (Background Process)
+## Deployment
+
+### Manual (default)
 
 ```bash
 python engine/omniscience.py start --vault ./vault   # Start in background
@@ -266,6 +268,34 @@ python engine/omniscience.py logs --lines 50          # View logs
 python engine/omniscience.py stop                     # Stop
 python engine/omniscience.py doctor                   # Health check
 ```
+
+### Docker
+
+```bash
+docker compose up -d              # Start engine + vault watcher
+docker compose logs -f             # Watch logs
+docker compose down                # Stop
+```
+
+Your vault and LanceDB index are bind-mounted from the host — nothing lives inside the container. Delete the container, your data is untouched.
+
+### systemd (Native Linux)
+
+```bash
+# Install the service (copies unit file, enables, starts)
+bash setup.sh --install-service
+
+# Or manually:
+sudo cp engine/command-center.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable command-center
+sudo systemctl start command-center
+
+# Watch logs
+journalctl -u command-center -f
+```
+
+Engine starts on boot, restarts on crash, logs to journald. No Docker overhead — native process management.
 
 ---
 

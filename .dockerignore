@@ -1,0 +1,22 @@
+# Don't copy these into the Docker image — they're either
+# host-only data (mounted as volumes) or dev artifacts.
+
+.lancedb/
+.omniscience/
+.venv/
+.git/
+.claude/
+vault/Core/*.md
+vault/Archive/MEMORY.md
+vault/Local/
+vault/Agents/
+__pycache__/
+*.pyc
+tests/
+scripts/
+migration/
+agents/
+skills/
+*.canvas
+*.md
+!engine/**/*.md
