@@ -77,8 +77,12 @@ DB_DIR = ".lancedb"
 TABLE_NAME = "context"
 MODEL_NAME = "BAAI/bge-small-en-v1.5"  # local model, first run downloads once
 EMBED_DIM = 384
-CHUNK_SIZE = 500
-CHUNK_OVERLAP = 80
+# ── Smart Markdown chunking ───────────────────────────────────────────────────
+# Replaces fixed 500-char sliding window. Chunks now respect Markdown structure:
+# sections split on headings, code blocks kept whole, heading breadcrumbs
+# carried into every child chunk so the reranker knows which section it's in.
+CHUNK_MAX_CHARS = int(os.getenv("OMNI_CHUNK_MAX_CHARS", "1500"))
+CHUNK_MIN_CHARS = int(os.getenv("OMNI_CHUNK_MIN_CHARS", "80"))
 API_PORT = 8765
 API_HOST = "127.0.0.1"
 IGNORED_DIRS = {".lancedb", ".obsidian", ".git", "__pycache__", "venv", ".venv", "node_modules"}
@@ -212,15 +216,178 @@ class CaptureRequest(BaseModel):
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-def chunk_text(text: str) -> list[str]:
-    chunks, start = [], 0
-    while start < len(text):
-        end = min(start + CHUNK_SIZE, len(text))
-        chunk = text[start:end].strip()
-        if len(chunk) > 30:
-            chunks.append(chunk)
-        start += CHUNK_SIZE - CHUNK_OVERLAP
-    return chunks
+
+def _extract_frontmatter(text: str) -> tuple[str, str]:
+    """Split YAML frontmatter from body. Returns (frontmatter_block, body)."""
+    if not text.startswith("---"):
+        return "", text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return "", text
+    fm = text[: end + 4].strip()
+    body = text[end + 4 :].lstrip("\n")
+    return fm, body
+
+
+def _heading_level(line: str) -> int:
+    """Return ATX heading level (1–6) or 0 if the line is not a heading."""
+    m = re.match(r"^(#{1,6})\s", line)
+    return len(m.group(1)) if m else 0
+
+
+def _split_into_sections(body: str) -> list[dict[str, str]]:
+    """Walk the document and group lines into heading-delimited sections.
+
+    Each section is a dict with:
+      heading  — breadcrumb string built from the parent heading chain,
+                 e.g. "## Config > ### Auth Tokens"
+      content  — the raw lines of the section (heading line included)
+
+    Code fences are tracked so headings inside a fenced block are ignored.
+    """
+    sections: list[dict[str, str]] = []
+    heading_stack: list[tuple[int, str]] = []   # [(level, text), ...]
+    current_heading: str = ""
+    current_lines: list[str] = []
+    in_code_block: bool = False
+
+    def _flush() -> None:
+        content = "\n".join(current_lines).strip()
+        if content:
+            sections.append({"heading": current_heading, "content": content})
+
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_code_block = not in_code_block
+
+        level = 0 if in_code_block else _heading_level(line)
+
+        if level > 0:
+            _flush()
+            current_lines = []
+            # Trim stack to ancestors only, then push the new heading.
+            heading_stack = [(lvl, txt) for lvl, txt in heading_stack if lvl < level]
+            heading_stack.append((level, line.lstrip("#").strip()))
+            # Build breadcrumb: "## H2 > ### H3"
+            current_heading = " > ".join(
+                f"{'#' * lvl} {txt}" for lvl, txt in heading_stack
+            )
+            current_lines.append(line)   # keep the heading itself in the chunk
+        else:
+            current_lines.append(line)
+
+    _flush()
+    return sections
+
+
+def _split_on_paragraphs(text: str, prefix: str) -> list[str]:
+    """Split text on blank-line paragraph boundaries, greedy-merging up to
+    CHUNK_MAX_CHARS, and prepend prefix to every resulting chunk.
+
+    Code fences are kept intact — a blank line inside a fence is not a split.
+    """
+    paragraphs: list[str] = []
+    current: list[str] = []
+    in_code = False
+
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code
+        if not in_code and line.strip() == "" and current:
+            para = "\n".join(current).strip()
+            if para:
+                paragraphs.append(para)
+            current = []
+        else:
+            current.append(line)
+
+    if current:
+        para = "\n".join(current).strip()
+        if para:
+            paragraphs.append(para)
+
+    if not paragraphs:
+        return [text] if len(text.strip()) >= CHUNK_MIN_CHARS else []
+
+    # Greedily merge paragraphs into chunks that stay under CHUNK_MAX_CHARS.
+    chunks: list[str] = []
+    bucket: list[str] = []
+    bucket_len = len(prefix)
+
+    for para in paragraphs:
+        addition = len(para) + 2   # +2 for the "\n\n" separator
+        if bucket and (bucket_len + addition) > CHUNK_MAX_CHARS:
+            chunks.append((prefix + "\n\n".join(bucket)).strip())
+            bucket = []
+            bucket_len = len(prefix)
+        bucket.append(para)
+        bucket_len += addition
+
+    if bucket:
+        chunks.append((prefix + "\n\n".join(bucket)).strip())
+
+    return [c for c in chunks if len(c.strip()) >= CHUNK_MIN_CHARS]
+
+
+def chunk_markdown(text: str) -> list[str]:
+    """Smart Markdown-aware chunker. Replaces the old fixed sliding window.
+
+    Algorithm:
+    1. Strip YAML frontmatter and attach it as a preamble to the first chunk.
+    2. Walk the document splitting on ATX headings (# / ## / ###).
+       Code fences are treated as atomic — headings inside them are ignored.
+    3. For each section that fits within CHUNK_MAX_CHARS, emit as one chunk
+       with the heading breadcrumb prepended for reranker context.
+    4. Oversized sections are split further on blank-line paragraph boundaries,
+       still carrying the heading breadcrumb on every sub-chunk.
+    5. Files with no headings fall back to paragraph-based splitting.
+
+    Result: chunks that are semantically coherent, context-annotated, and
+    never artificially cut mid-sentence or mid-code-block.
+    """
+    if not text or not text.strip():
+        return []
+
+    frontmatter, body = _extract_frontmatter(text)
+    sections = _split_into_sections(body)
+
+    chunks: list[str] = []
+
+    def _attach_frontmatter(chunk: str) -> str:
+        if frontmatter and not chunks:
+            return (frontmatter + "\n\n" + chunk).strip()
+        return chunk
+
+    if not sections:
+        # No headings — paragraph-split the whole body.
+        raw = _split_on_paragraphs(body.strip(), "")
+        if raw:
+            raw[0] = _attach_frontmatter(raw[0])
+        return raw
+
+    for section in sections:
+        heading_crumb = section["heading"]
+        content = section["content"]
+        prefix = f"{heading_crumb}\n\n" if heading_crumb else ""
+        full = (prefix + content).strip()
+
+        if not full or len(full) < CHUNK_MIN_CHARS:
+            continue
+
+        if len(full) <= CHUNK_MAX_CHARS:
+            chunks.append(_attach_frontmatter(full))
+        else:
+            sub = _split_on_paragraphs(content, prefix)
+            if sub:
+                sub[0] = _attach_frontmatter(sub[0])
+            chunks.extend(sub)
+
+    return [c for c in chunks if len(c.strip()) >= CHUNK_MIN_CHARS]
+
+
+# Keep the old name as an alias so any external callers still work.
+chunk_text = chunk_markdown
 
 
 def extract_tags(text: str) -> str:
@@ -602,7 +769,7 @@ class OmniscienceEngine:
                 print(f"  ⏭️  {rel} unchanged (cache hit)")
             return int(existing.get("chunks", 0) or 0)
 
-        chunks = chunk_text(content)
+        chunks = chunk_markdown(content)
         if not chunks:
             safe_rel = rel.replace("'", "''")
             try:
