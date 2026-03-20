@@ -269,6 +269,13 @@ def infer_namespace(rel_path: str) -> str:
         return "company_core"
     if rel.startswith("archive/"):
         return "company_memory"
+    # Per-agent private namespaces. Files under agents/{agent_id}/ are indexed
+    # under agent_{agent_id} and only surface in searches that include that
+    # namespace — keeping each agent's private memory isolated from the shared vault.
+    if rel.startswith("agents/"):
+        parts = Path(rel).parts
+        agent_id = slug(parts[1]) if len(parts) > 1 else "default"
+        return f"agent_{agent_id}"
 
     first = Path(rel).parts[0] if Path(rel).parts else "default"
     return slug(first)

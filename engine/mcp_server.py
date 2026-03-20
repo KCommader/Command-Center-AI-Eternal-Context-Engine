@@ -130,6 +130,10 @@ TOOLS = [
                 "namespace": {
                     "type": "string",
                     "description": "Optional: filter to a namespace (e.g. 'company_core', 'knowledge', 'projects')"
+                },
+                "agent_id": {
+                    "type": "string",
+                    "description": "Optional: include this agent's private memory in the search alongside shared vault (e.g. 'claude', 'grok', 'gemini')"
                 }
             },
             "required": ["query"]
@@ -142,7 +146,8 @@ TOOLS = [
             "The engine automatically decides if this is cache (session noise), "
             "short-term (project/task state), or long-term (preference/decision). "
             "You don't need to classify it — just pass the content. "
-            "Call this when you learn something the user would want recalled in future sessions."
+            "Call this when you learn something the user would want recalled in future sessions. "
+            "Pass agent_id to write to that agent's private memory space instead of the shared vault."
         ),
         "inputSchema": {
             "type": "object",
@@ -155,6 +160,10 @@ TOOLS = [
                     "type": "string",
                     "description": "Where this came from (e.g. 'conversation', 'user_stated', 'inferred')",
                     "default": "conversation"
+                },
+                "agent_id": {
+                    "type": "string",
+                    "description": "Optional: store in this agent's private namespace instead of shared vault (e.g. 'claude', 'grok', 'gemini')"
                 }
             },
             "required": ["content"]
@@ -345,6 +354,11 @@ TOOLS = [
                     "type": "integer",
                     "description": "Maximum recommended skills to include (default: 6, max: 12)",
                     "default": 6
+                },
+                "agent_id": {
+                    "type": "string",
+                    "description": "Optional: include this agent's private context files in the boot packet alongside shared vault resources",
+                    "default": ""
                 }
             },
             "required": ["agent"]
@@ -759,10 +773,17 @@ def _headers() -> dict:
     return h
 
 
-async def _engine_search(query: str, k: int = 5, namespace: str | None = None) -> dict:
+async def _engine_search(
+    query: str,
+    k: int = 5,
+    namespace: str | None = None,
+    namespaces: list[str] | None = None,
+) -> dict:
     payload: dict = {"query": query, "k": k}
-    if namespace:
-        payload["namespaces"] = [namespace]
+    # namespaces list takes precedence; namespace (singular) is the legacy param
+    ns = namespaces or ([namespace] if namespace else None)
+    if ns:
+        payload["namespaces"] = ns
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.post(f"{ENGINE_URL}/search", json=payload, headers=_headers())
         resp.raise_for_status()
@@ -817,10 +838,22 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
 
     if name == "search_memory":
         try:
+            # When agent_id is provided, search both the shared vault and the
+            # agent's private namespace. The agent sees everything it's allowed
+            # to see — shared global memory plus its own private context.
+            agent_id = arguments.get("agent_id", "").strip()
+            namespace = arguments.get("namespace")
+            namespaces = None
+            if agent_id:
+                private_ns = f"agent_{agent_id.lower().replace(' ', '_')}"
+                namespaces = [private_ns] if not namespace else [namespace, private_ns]
+            elif namespace:
+                namespaces = [namespace]
+
             result = await _engine_search(
                 query=arguments["query"],
                 k=arguments.get("k", 5),
-                namespace=arguments.get("namespace")
+                namespaces=namespaces,
             )
             results = result.get("results", [])
             if not results:
@@ -842,8 +875,33 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
     elif name == "store":
         content = arguments.get("content", "").strip()
         source = arguments.get("source", "conversation")
+        agent_id = arguments.get("agent_id", "").strip()
         if not content:
             return "Nothing to store."
+
+        # Agent-private writes go to vault/Agents/{agent_id}/ and are indexed
+        # under the agent_{id} namespace — isolated from the shared vault.
+        # Shared writes (no agent_id) go through the normal classifier pipeline.
+        if agent_id:
+            from datetime import datetime as _dt
+            safe_id = agent_id.lower().replace(" ", "_")
+            agent_dir = VAULT_PATH / "Agents" / safe_id
+            agent_dir.mkdir(parents=True, exist_ok=True)
+            date_stamp = _dt.utcnow().strftime("%Y-%m-%d")
+            target = agent_dir / f"memory-{date_stamp}.md"
+            ts = _dt.utcnow().isoformat()
+            with target.open("a", encoding="utf-8") as f:
+                f.write(f"- [{ts}] [source={source}] — {content}\n")
+            try:
+                async with httpx.AsyncClient(timeout=3) as client:
+                    await client.post(f"{ENGINE_URL}/admin/reindex", headers=_headers())
+            except Exception:
+                pass
+            return (
+                f"Stored in **agent private memory** ({safe_id}).\n"
+                f"Namespace: agent_{safe_id}\n"
+                f"File: Agents/{safe_id}/{target.name}"
+            )
 
         result = classify(content)
         tier = result.tier
@@ -1019,6 +1077,7 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
         target = arguments.get("target", "").strip()
         reason = arguments.get("reason", "startup").strip() or "startup"
         limit = max(1, min(int(arguments.get("limit", 6)), 12))
+        agent_id = arguments.get("agent_id", "").strip()
 
         ensure_state_files(VAULT_PATH)
         working_set = read_working_set(VAULT_PATH)
@@ -1043,9 +1102,25 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             for item in stale_entries[:8]
         ) or "- No stale core files detected."
 
+        # If the agent has a private namespace, surface its memory files too.
+        agent_private_section = ""
+        if agent_id:
+            safe_id = agent_id.lower().replace(" ", "_")
+            agent_dir = VAULT_PATH / "Agents" / safe_id
+            if agent_dir.exists():
+                private_files = sorted(agent_dir.glob("*.md"))
+                if private_files:
+                    file_lines = "\n".join(f"- Agents/{safe_id}/{p.name}" for p in private_files[-5:])
+                    agent_private_section = (
+                        f"\n## Agent Private Context ({safe_id})\n"
+                        f"Include these in your load order after shared core files:\n"
+                        f"{file_lines}\n"
+                    )
+
         return (
             f"# Command Center Bootstrap\n\n"
             f"agent: {agent}\n"
+            f"agent_id: {agent_id or 'shared'}\n"
             f"reason: {reason}\n"
             f"task: {task or effective_task or 'n/a'}\n"
             f"target: {target or 'n/a'}\n\n"
@@ -1077,6 +1152,7 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             f"3. Call read_skill() on each recommended skill before planning.\n"
             f"4. If this is a post-compact recovery, trust the working set and handoff before old chat fragments.\n"
             f"5. Store durable preferences with store(), update_working_set(), record_handoff(), or verify_vault_file()."
+            + agent_private_section
         )
 
     elif name == "update_working_set":
