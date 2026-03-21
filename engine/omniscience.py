@@ -10,13 +10,14 @@ Commands:
   status           Show process status
   doctor           Validate local setup
   logs             Show recent log output
-  watchdog-start   Start engine watchdog in background
-  watchdog-stop    Stop the watchdog
-  watchdog-status  Show watchdog status
+  sentinel-start   Start engine sentinel in background
+  sentinel-stop    Stop the sentinel
+  sentinel-status  Show sentinel status
   mcp-start        Start MCP HTTP server in background (for NAS / network)
   mcp-stop         Stop the MCP HTTP server
   mcp-status       Show MCP server status
   setup-ai         Write MCP config for Claude Code, Desktop, Cursor, or Zed
+  backup           Snapshot vault + index to a timestamped archive
 """
 
 from __future__ import annotations
@@ -274,7 +275,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "fastapi",
         "uvicorn",
         "sentence_transformers",
-        "watchdog",
+        "sentinel",
     ]
     for dep in deps:
         try:
@@ -368,25 +369,25 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_watchdog_start(args: argparse.Namespace) -> int:
-    """Start the watchdog in the background."""
-    pid_file = RUNTIME_DIR / "watchdog.pid"
+def cmd_sentinel_start(args: argparse.Namespace) -> int:
+    """Start the sentinel in the background."""
+    pid_file = RUNTIME_DIR / "sentinel.pid"
     if pid_file.exists():
         try:
             existing_pid = int(pid_file.read_text().strip())
             if _is_process_running(existing_pid):
-                print(f"Watchdog already running (pid={existing_pid})")
+                print(f"Sentinel already running (pid={existing_pid})")
                 return 0
         except Exception:
             pass
 
-    watchdog_script = Path(__file__).resolve().with_name("watchdog.py")
-    if not watchdog_script.exists():
-        print(f"Watchdog script not found: {watchdog_script}")
+    sentinel_script = Path(__file__).resolve().with_name("sentinel.py")
+    if not sentinel_script.exists():
+        print(f"Sentinel script not found: {sentinel_script}")
         return 1
 
     _ensure_runtime_dir()
-    log_path = RUNTIME_DIR / "watchdog.log"
+    log_path = RUNTIME_DIR / "sentinel.log"
     with log_path.open("a", encoding="utf-8") as logf:
         popen_kwargs: dict[str, Any] = {
             "cwd": str(ROOT),
@@ -401,34 +402,34 @@ def cmd_watchdog_start(args: argparse.Namespace) -> int:
         else:
             popen_kwargs["start_new_session"] = True
 
-        proc = subprocess.Popen([args.python, str(watchdog_script), "run"], **popen_kwargs)
+        proc = subprocess.Popen([args.python, str(sentinel_script), "run"], **popen_kwargs)
 
     time.sleep(0.5)
     if proc.poll() is not None:
-        print("Watchdog failed to start.")
+        print("Sentinel failed to start.")
         return 1
 
-    print(f"Watchdog started (pid={proc.pid})")
+    print(f"Sentinel started (pid={proc.pid})")
     print(f"Log: {log_path}")
     return 0
 
 
-def cmd_watchdog_stop(_: argparse.Namespace) -> int:
-    """Stop the running watchdog."""
-    pid_file = RUNTIME_DIR / "watchdog.pid"
+def cmd_sentinel_stop(_: argparse.Namespace) -> int:
+    """Stop the running sentinel."""
+    pid_file = RUNTIME_DIR / "sentinel.pid"
     if not pid_file.exists():
-        print("Watchdog is not running (no pid file).")
+        print("Sentinel is not running (no pid file).")
         return 0
 
     try:
         pid = int(pid_file.read_text().strip())
     except Exception:
-        print("Could not read watchdog pid file.")
+        print("Could not read sentinel pid file.")
         pid_file.unlink(missing_ok=True)
         return 1
 
     if not _is_process_running(pid):
-        print("Watchdog already stopped (stale pid file removed).")
+        print("Sentinel already stopped (stale pid file removed).")
         pid_file.unlink(missing_ok=True)
         return 0
 
@@ -436,33 +437,33 @@ def cmd_watchdog_stop(_: argparse.Namespace) -> int:
         os.kill(pid, signal.SIGTERM)
         _wait_for_exit(pid, 5.0)
         pid_file.unlink(missing_ok=True)
-        print(f"Watchdog stopped (pid={pid}).")
+        print(f"Sentinel stopped (pid={pid}).")
     except Exception as exc:
-        print(f"Failed to stop watchdog: {exc}")
+        print(f"Failed to stop sentinel: {exc}")
         return 1
 
     return 0
 
 
-def cmd_watchdog_status(_: argparse.Namespace) -> int:
-    """Show whether the watchdog is running."""
-    pid_file = RUNTIME_DIR / "watchdog.pid"
+def cmd_sentinel_status(_: argparse.Namespace) -> int:
+    """Show whether the sentinel is running."""
+    pid_file = RUNTIME_DIR / "sentinel.pid"
     if not pid_file.exists():
-        print("watchdog: stopped")
+        print("sentinel: stopped")
         return 0
 
     try:
         pid = int(pid_file.read_text().strip())
     except Exception:
-        print("watchdog: stopped (unreadable pid file)")
+        print("sentinel: stopped (unreadable pid file)")
         return 0
 
     if _is_process_running(pid):
-        log_path = RUNTIME_DIR / "watchdog.log"
-        print(f"watchdog: running (pid={pid})")
+        log_path = RUNTIME_DIR / "sentinel.log"
+        print(f"sentinel: running (pid={pid})")
         print(f"log: {log_path}")
     else:
-        print("watchdog: stopped (stale pid file)")
+        print("sentinel: stopped (stale pid file)")
         pid_file.unlink(missing_ok=True)
 
     return 0
@@ -652,16 +653,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_logs.add_argument("--lines", type=int, default=60, help="Number of log lines")
     p_logs.set_defaults(func=cmd_logs)
 
-    # watchdog subcommands
-    p_wd_start = sub.add_parser("watchdog-start", help="Start engine watchdog in background")
+    # sentinel subcommands
+    p_wd_start = sub.add_parser("sentinel-start", help="Start engine sentinel in background")
     p_wd_start.add_argument("--python", default=sys.executable, help="Python executable")
-    p_wd_start.set_defaults(func=cmd_watchdog_start)
+    p_wd_start.set_defaults(func=cmd_sentinel_start)
 
-    p_wd_stop = sub.add_parser("watchdog-stop", help="Stop the engine watchdog")
-    p_wd_stop.set_defaults(func=cmd_watchdog_stop)
+    p_wd_stop = sub.add_parser("sentinel-stop", help="Stop the engine sentinel")
+    p_wd_stop.set_defaults(func=cmd_sentinel_stop)
 
-    p_wd_status = sub.add_parser("watchdog-status", help="Show watchdog status")
-    p_wd_status.set_defaults(func=cmd_watchdog_status)
+    p_wd_status = sub.add_parser("sentinel-status", help="Show sentinel status")
+    p_wd_status.set_defaults(func=cmd_sentinel_status)
 
     p_sync = sub.add_parser("sync-skills", help="Sync vault/Skills/ to all AI runtimes")
     p_sync.add_argument(
@@ -712,6 +713,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_mcp_status = sub.add_parser("mcp-status", help="Show MCP HTTP server status")
     p_mcp_status.set_defaults(func=cmd_mcp_status)
+
+    p_backup = sub.add_parser("backup", help="Snapshot vault + index to a timestamped archive")
+    p_backup.add_argument("--vault", default=str(DEFAULT_VAULT), help="Vault path")
+    p_backup.add_argument("--output", "-o", metavar="DIR", help="Output directory (default: .omniscience/backups/)")
+    p_backup.set_defaults(func=cmd_backup)
 
     return parser
 
@@ -819,6 +825,42 @@ def cmd_setup_ai(args: argparse.Namespace) -> int:
 
     print()
     print("Done. Run `python engine/omniscience.py doctor` to verify.")
+    return 0
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Create a timestamped .tar.gz snapshot of the vault and LanceDB index."""
+    import shutil
+    import tarfile
+    from datetime import datetime as _dt
+
+    vault = Path(args.vault).resolve()
+    if not vault.is_dir():
+        print(f"Vault not found: {vault}")
+        return 1
+
+    backup_dir = Path(args.output) if args.output else RUNTIME_DIR / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    stamp = _dt.now().strftime("%Y%m%d-%H%M%S")
+    archive_name = f"ece-backup-{stamp}.tar.gz"
+    archive_path = backup_dir / archive_name
+
+    db_dir = vault.parent / ".lancedb"
+
+    print(f"Backing up vault: {vault}")
+    if db_dir.is_dir():
+        print(f"Backing up index: {db_dir}")
+
+    with tarfile.open(archive_path, "w:gz") as tar:
+        tar.add(vault, arcname="vault")
+        if db_dir.is_dir():
+            tar.add(db_dir, arcname=".lancedb")
+
+    size_mb = archive_path.stat().st_size / (1024 * 1024)
+    print(f"\nBackup saved: {archive_path}")
+    print(f"Size: {size_mb:.1f} MB")
+    print(f"\nRestore: tar xzf {archive_path.name} -C /path/to/Command-Center-AI/")
     return 0
 
 

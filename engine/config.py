@@ -57,6 +57,7 @@ from typing import Any
 # Maps YAML path (dot-notation) → OMNI_* env var name.
 # Only listed here if there is a direct OMNI_* counterpart in engine.py.
 _YAML_TO_ENV: dict[str, str] = {
+    "embedding.model":                   "OMNI_EMBEDDING_MODEL",
     "search.mode":                       "OMNI_DEFAULT_SEARCH_MODE",
     "search.bm25_enabled":               "OMNI_BM25_ENABLED",
     "search.bm25_candidates":            "OMNI_BM25_CANDIDATES",

@@ -253,6 +253,11 @@ Call `record_handoff` at the end of any meaningful session. Call `bootstrap_agen
 All settings live in `vault/config.yaml` — a human-readable file that ships pre-configured with sensible defaults. Open it in any text editor or directly in Obsidian.
 
 ```yaml
+embedding:
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  # Supports 50+ languages (EN, ES, ZH, PT, JA, RU...)
+  # English-only alternative: BAAI/bge-small-en-v1.5
+
 search:
   mode: balanced          # strict | balanced | exploratory
   bm25_enabled: true      # keyword search alongside vector
@@ -319,10 +324,13 @@ python engine/omniscience.py mcp-start               # Start MCP server (port 87
 python engine/omniscience.py mcp-status               # Check MCP server
 python engine/omniscience.py mcp-stop                 # Stop MCP server
 
-# Watchdog (auto-restarts engine on crash)
-python engine/omniscience.py watchdog-start           # Start watchdog
-python engine/omniscience.py watchdog-status           # Check watchdog
-python engine/omniscience.py watchdog-stop             # Stop watchdog
+# Sentinel (auto-restarts engine on crash)
+python engine/omniscience.py sentinel-start           # Start sentinel
+python engine/omniscience.py sentinel-status           # Check sentinel
+python engine/omniscience.py sentinel-stop             # Stop sentinel
+
+# Backup
+python engine/omniscience.py backup                    # Snapshot vault + index
 ```
 
 ### Docker
@@ -364,11 +372,13 @@ Engine starts on boot, restarts on crash, logs to journald. No Docker overhead �
 | `engine/memory_classifier.py` | Auto memory routing | Rule-based tier classifier — no LLM needed, ~1ms |
 | `.lancedb/` | Fast local vector search | Like SQLite but for vectors — auto-built, never touch manually |
 | `engine/mcp_server.py` | Universal AI connector | MCP protocol, two transports: stdio (local) + HTTP (network) |
-| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/mcp-start/mcp-stop/watchdog-start/sync-skills/setup-ai |
+| `engine/omniscience.py` | App-like UX | start/stop/status/doctor/logs/mcp-start/mcp-stop/sentinel-start/sync-skills/setup-ai/backup |
 | `engine/nightly_maintenance.py` | Anti-bloat | Cache purge + short-term TTL expiry + health check |
 | `engine/context_state.py` | Anti-compaction | Reads/writes SESSION_HANDOFF, ACTIVE_CONTEXT, FRESHNESS — bootstrap recovery packet |
 | `engine/skill_adapter.py` | Universal skills | Syncs vault/Skills/ to Claude, Gemini, Codex, Custom AI native formats |
-| `engine/watchdog.py` | Engine resilience | Monitors /health, auto-restarts the engine on crash or timeout |
+| `engine/sentinel.py` | Engine resilience | Monitors /health, auto-restarts the engine on crash or timeout |
+| `engine/config.py` | Human-readable config | Reads `vault/config.yaml`, maps to `OMNI_*` env vars — YAML defaults, env vars override |
+| `engine/__version__.py` | Single version source | One file, one version number — used by engine, MCP server, and API responses |
 
 **Key design decisions:**
 - **Markdown is the source of truth** — all memory lives in `.md` files you can read, edit, and open in Obsidian. LanceDB is the auto-generated search index, never the source.
@@ -377,7 +387,7 @@ Engine starts on boot, restarts on crash, logs to journald. No Docker overhead �
 - **Role-based auth** — separate Bearer tokens for read/write/admin. Give each agent only the access it needs.
 - **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs the server on a NAS and serves any machine on your LAN from one vault.
 
-- **Embedding model**: `BAAI/bge-small-en-v1.5` — 100% local, ~130MB, ~50ms/doc
+- **Embedding model**: `paraphrase-multilingual-MiniLM-L12-v2` — 100% local, multilingual (EN, ES, ZH, PT, JA, RU + 50 more), configurable via `config.yaml`
 - **Vector DB**: LanceDB — embedded, disk-based, no server needed
 - **API**: FastAPI on `localhost:8765`
 - **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)

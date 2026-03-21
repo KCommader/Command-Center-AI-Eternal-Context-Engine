@@ -6,6 +6,15 @@
 #
 # Full reference: github.com/KCommader/Command-Center-AI-Eternal-Context-Engine
 
+# ── Embedding ──────────────────────────────────────────────────────────────
+# The model used to convert text into vectors for semantic search.
+# Default is multilingual (EN, ES, ZH, PT, JA, RU + 50 more languages).
+# Changing this requires a full reindex: python engine/omniscience.py reindex
+embedding:
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  # English-only (faster, smaller): BAAI/bge-small-en-v1.5
+  # Best multilingual (larger, slower): BAAI/bge-m3
+
 # ── Search ─────────────────────────────────────────────────────────────────
 search:
   # Default search mode: strict | balanced | exploratory

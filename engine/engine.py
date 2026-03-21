@@ -75,7 +75,7 @@ except ImportError:
 DEFAULT_VAULT = "./vault"
 DB_DIR = ".lancedb"
 TABLE_NAME = "context"
-MODEL_NAME = "BAAI/bge-small-en-v1.5"  # local model, first run downloads once
+MODEL_NAME = os.getenv("OMNI_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 EMBED_DIM = 384
 # ── Smart Markdown chunking ───────────────────────────────────────────────────
 # Replaces fixed 500-char sliding window. Chunks now respect Markdown structure:
@@ -1499,7 +1499,8 @@ class VaultWatcher(FileSystemEventHandler):
 
 # ─── FastAPI Server ───────────────────────────────────────────────────────────
 def create_app(engine: OmniscienceEngine) -> FastAPI:
-    app = FastAPI(title="Omniscience Engine", version="1.9.0")
+    from __version__ import __version__
+    app = FastAPI(title="Omniscience Engine", version=__version__)
 
     auth_cfg = load_auth_config()
     token_roles = build_token_roles(auth_cfg)
@@ -1679,7 +1680,7 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         _log(_agent_name(authorization, x_agent_name), "/policy/grounding")
         return JSONResponse(
             {
-                "version": "1.9.0",
+                "version": __version__,
                 "rules": [
                     "Use only returned evidence chunks as factual basis.",
                     "If verdict is not grounded, explicitly say evidence is insufficient.",

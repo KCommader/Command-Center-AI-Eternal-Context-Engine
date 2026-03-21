@@ -101,7 +101,7 @@ from context_state import (
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_NAME = "command-center"
-SERVER_VERSION = "1.9.0"
+from __version__ import __version__ as SERVER_VERSION
 
 ENGINE_URL = os.environ.get("OMNI_ENGINE_URL", "http://127.0.0.1:8765")
 ENGINE_API_KEY = os.environ.get("OMNI_API_KEY", "")
