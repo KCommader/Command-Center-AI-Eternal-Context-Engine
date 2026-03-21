@@ -14,6 +14,20 @@ embedding:
   model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
   # English-only (faster, smaller): BAAI/bge-small-en-v1.5
   # Best multilingual (larger, slower): BAAI/bge-m3
+  # nomic-embed-text-v1.5: high quality but 6× slower on CPU, needs einops.
+  #   Requires task prefixes (set both if using nomic):
+  # query_prefix: "search_query: "
+  # document_prefix: "search_document: "
+  #
+  # Performance guide (CPU-only):
+  #   paraphrase-multilingual-MiniLM-L12-v2: ~40ms/query, 384-dim, 50+ langs
+  #   BAAI/bge-small-en-v1.5:                ~35ms/query, 384-dim, EN only
+  #   nomic-embed-text-v1.5:                ~254ms/query, 768-dim, EN (needs einops)
+  #   BAAI/bge-m3:                          ~400ms/query, 1024-dim, 100+ langs
+  #
+  # Quality vs corpus size: on small vaults (<50 docs), MiniLM is the right
+  # default. Larger models only outperform on 500+ doc corpora where they
+  # need to discriminate between many similar documents.
 
 # ── Search ─────────────────────────────────────────────────────────────────
 search:
@@ -31,6 +45,8 @@ search:
   rerank_enabled: true
   rerank_model: cross-encoder/ms-marco-MiniLM-L-12-v2
   rerank_candidates: 36
+  rerank_min_candidates: 5    # skip reranker if fewer than N results (saves ~93ms)
+  rerank_cpu_gate: 85         # skip reranker if CPU usage >= N% (0 = disabled)
 
   # Query expansion — appends related vocab terms before searching
   query_expansion_enabled: true
@@ -65,6 +81,13 @@ privacy:
   #   - diary
   #   - medical
   #   - financial
+
+# ── Reindex ────────────────────────────────────────────────────────────────
+reindex:
+  # Throttle: sleep N ms between files during reindex to yield CPU to
+  # interactive queries. On <8 thread machines this prevents reindex from
+  # starving search. 50ms × 20 files = 1s total overhead.
+  throttle_ms: 50
 
 # ── Advanced ───────────────────────────────────────────────────────────────
 # advanced:

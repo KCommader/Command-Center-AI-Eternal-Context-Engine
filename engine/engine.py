@@ -77,6 +77,11 @@ DB_DIR = ".lancedb"
 TABLE_NAME = "context"
 MODEL_NAME = os.getenv("OMNI_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 EMBED_DIM = 384
+# Some embedding models (e.g. nomic-embed-text) require a task prefix on queries
+# like "search_query: ". This prefix must ONLY go to the embedding call, never
+# to BM25 or any string-matching path.  Set via env or config.yaml.
+EMBED_QUERY_PREFIX = os.getenv("OMNI_EMBED_QUERY_PREFIX", "").strip()
+EMBED_DOCUMENT_PREFIX = os.getenv("OMNI_EMBED_DOCUMENT_PREFIX", "").strip()
 # ── Smart Markdown chunking ───────────────────────────────────────────────────
 # Replaces fixed 500-char sliding window. Chunks now respect Markdown structure:
 # sections split on headings, code blocks kept whole, heading breadcrumbs
@@ -114,6 +119,23 @@ RERANK_ENABLED = _env_flag("OMNI_RERANK_ENABLED", True)
 RERANK_MODEL_NAME = os.getenv("OMNI_RERANK_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-12-v2").strip()
 RERANK_CANDIDATES = int(os.getenv("OMNI_RERANK_CANDIDATES", "36"))
 RERANK_BATCH_SIZE = int(os.getenv("OMNI_RERANK_BATCH_SIZE", "16"))
+RERANK_MIN_CANDIDATES = int(os.getenv("OMNI_RERANK_MIN_CANDIDATES", "5"))
+RERANK_CPU_GATE = float(os.getenv("OMNI_RERANK_CPU_GATE", "85"))
+
+# psutil is optional — used only for CPU gating the reranker
+try:
+    import psutil as _psutil
+    _PSUTIL_AVAILABLE = True
+except ImportError:
+    _psutil = None  # type: ignore[assignment]
+    _PSUTIL_AVAILABLE = False
+
+
+def _cpu_load_too_high() -> bool:
+    """Skip reranker if CPU is already saturated (default: >=85%)."""
+    if not _PSUTIL_AVAILABLE or RERANK_CPU_GATE <= 0:
+        return False
+    return _psutil.cpu_percent(interval=None) >= RERANK_CPU_GATE
 ENFORCE_ANSWER_CONTRACT_DEFAULT = _env_flag("OMNI_ENFORCE_ANSWER_CONTRACT", True)
 
 # ── BM25 hybrid search ────────────────────────────────────────────────────────
@@ -129,6 +151,12 @@ BM25_CANDIDATES = int(os.getenv("OMNI_BM25_CANDIDATES", "40"))  # BM25-only cand
 # Uses the embedding model (no LLM, no cloud call, no extra dependency).
 QUERY_EXPANSION_ENABLED = _env_flag("OMNI_QUERY_EXPANSION_ENABLED", True)
 QUERY_EXPANSION_TERMS = int(os.getenv("OMNI_QUERY_EXPANSION_TERMS", "5"))
+
+# ── Reindex throttle ────────────────────────────────────────────────────────
+# On machines with <8 threads, background reindex can starve interactive
+# queries of CPU. This adds a sleep between files during reindex.
+# 50ms × 20 files = 1s total overhead — keeps search responsive.
+REINDEX_THROTTLE_MS = int(os.getenv("OMNI_REINDEX_THROTTLE_MS", "50"))
 
 STOPWORDS = {
     "a",
@@ -867,7 +895,9 @@ class OmniscienceEngine:
         self.db.drop_table(TABLE_NAME)
         return self.db.create_table(TABLE_NAME, schema=SCHEMA)
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], prefix: str = "") -> list[list[float]]:
+        if prefix:
+            texts = [f"{prefix}{t}" for t in texts]
         return self.model.encode(texts, show_progress_bar=False).tolist()
 
     def index_file(
@@ -902,7 +932,7 @@ class OmniscienceEngine:
                 self._invalidate_query_cache()
             return 0
 
-        vectors = self.embed(chunks)
+        vectors = self.embed(chunks, prefix=EMBED_DOCUMENT_PREFIX)
         tags = extract_tags(content)
         now = datetime.utcnow().isoformat()
         namespace = infer_namespace(rel)
@@ -952,6 +982,7 @@ class OmniscienceEngine:
         total = 0
         print(f"🔍 Indexing {len(files)} files...\n")
         self._prune_manifest()
+        throttle_sec = REINDEX_THROTTLE_MS / 1000.0
         for file_path in files:
             total += self.index_file(
                 file_path,
@@ -959,6 +990,9 @@ class OmniscienceEngine:
                 persist_manifest=False,
                 invalidate_cache=False,
             )
+            # Yield CPU to interactive queries between files.
+            if throttle_sec > 0:
+                time.sleep(throttle_sec)
 
         self.indexed_at = datetime.utcnow()
         self._save_manifest()
@@ -1045,6 +1079,16 @@ class OmniscienceEngine:
 
     def _apply_reranker(self, query: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not rows or self.reranker is None:
+            return rows
+
+        # Skip reranker when there are too few candidates — it can't
+        # meaningfully discriminate and just adds latency (~93ms per call).
+        if len(rows) < RERANK_MIN_CANDIDATES:
+            return rows
+
+        # Skip reranker if CPU is already saturated (avoids starving
+        # the event loop and other interactive queries).
+        if _cpu_load_too_high():
             return rows
 
         candidate_n = max(1, min(len(rows), RERANK_CANDIDATES))
@@ -1157,7 +1201,9 @@ class OmniscienceEngine:
         # own vocabulary. Broadens recall for both vector and BM25 paths.
         expanded_query = self._expand_query(query)
 
-        vec = self.embed([expanded_query])[0]
+        # Embedding uses the task prefix (e.g. "search_query: " for nomic).
+        # BM25 always uses the raw expanded query — prefix would break FTS.
+        vec = self.embed([expanded_query], prefix=EMBED_QUERY_PREFIX)[0]
         fetch_k = max(top_k * 8, 20)
 
         rows = (

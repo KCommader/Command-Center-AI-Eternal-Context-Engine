@@ -361,6 +361,15 @@ journalctl -u command-center -f
 
 Engine starts on boot, restarts on crash, logs to journald. No Docker overhead — native process management.
 
+### Windows
+
+ECE runs on Windows via PowerShell. Two differences:
+
+- Use `;` instead of `&&` for command chaining (`cd engine ; python omniscience.py start`)
+- Use `python3` or the full venv path if `python` resolves to the Windows Store stub
+
+All other commands work identically. Docker is the recommended path on Windows for production use.
+
 ---
 
 ## Architecture
