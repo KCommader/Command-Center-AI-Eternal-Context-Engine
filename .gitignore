@@ -10,6 +10,8 @@ vault/Core/COMPANY-SOUL.md
 vault/Core/ACTIVE_CONTEXT.md
 vault/Core/SESSION_HANDOFF.md
 vault/Core/FRESHNESS.md
+vault/Core/CAPITAL_STATUS.md
+vault/Core/EXECUTION_HANDOFF.md
 vault/Archive/MEMORY.md
 
 # Migration output — analysis files are personal history, never commit
