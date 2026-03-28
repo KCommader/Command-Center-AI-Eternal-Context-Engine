@@ -40,7 +40,7 @@ import re
 import threading
 import time
 from collections import OrderedDict, deque
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +76,10 @@ DEFAULT_VAULT = "./vault"
 DB_DIR = ".lancedb"
 TABLE_NAME = "context"
 MODEL_NAME = os.getenv("OMNI_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-EMBED_DIM = 384
+# EMBED_DIM is determined at runtime from the loaded model — do NOT hardcode here.
+# Placeholder used only for SCHEMA construction; _ensure_table() detects dimension
+# mismatches and recreates the table automatically when the model changes.
+EMBED_DIM = int(os.getenv("OMNI_EMBED_DIM_HINT", "0")) or None  # None = auto-detect
 # Some embedding models (e.g. nomic-embed-text) require a task prefix on queries
 # like "search_query: ". This prefix must ONLY go to the embedding call, never
 # to BM25 or any string-matching path.  Set via env or config.yaml.
@@ -229,19 +232,24 @@ STORE_DEDUP_THRESHOLD = float(os.getenv("OMNI_STORE_DEDUP_THRESHOLD", "0.92"))  
 
 ROLE_RANK = {"read": 1, "write": 2, "admin": 3}
 
-SCHEMA = pa.schema(
-    [
-        pa.field("id", pa.string()),
-        pa.field("path", pa.string()),
-        pa.field("chunk_index", pa.int32()),
-        pa.field("text", pa.string()),
-        pa.field("tags", pa.string()),
-        pa.field("namespace", pa.string()),
-        pa.field("source", pa.string()),
-        pa.field("vector", pa.list_(pa.float32(), EMBED_DIM)),
-        pa.field("indexed_at", pa.string()),
-    ]
-)
+def _make_schema(dim: int) -> pa.Schema:
+    """Build the LanceDB table schema for a given embedding dimension."""
+    return pa.schema(
+        [
+            pa.field("id", pa.string()),
+            pa.field("path", pa.string()),
+            pa.field("chunk_index", pa.int32()),
+            pa.field("text", pa.string()),
+            pa.field("tags", pa.string()),
+            pa.field("namespace", pa.string()),
+            pa.field("source", pa.string()),
+            pa.field("vector", pa.list_(pa.float32(), dim)),
+            pa.field("indexed_at", pa.string()),
+        ]
+    )
+
+# Legacy alias — overwritten per-engine-instance once model dim is known.
+SCHEMA = _make_schema(384)
 
 
 # ─── API Models ───────────────────────────────────────────────────────────────
@@ -562,7 +570,23 @@ class OmniscienceEngine:
 
         print("   Loading embedding model (first run downloads model weights)...")
         self.model = SentenceTransformer(MODEL_NAME, trust_remote_code=True)
-        print("   ✅ Model ready.\n")
+        # Cap max_seq_length to 512 to prevent RoPE cache overflow on CPU.
+        # GTE supports 8192 tokens but its new_impl RoPE cache is built lazily
+        # and can overflow when batch sizes vary. 512 is safe and matches most
+        # encoders' default. Override via OMNI_EMBED_MAX_SEQ_LEN if needed.
+        _max_seq = int(os.getenv("OMNI_EMBED_MAX_SEQ_LEN", "512"))
+        self.model.max_seq_length = _max_seq
+        # Detect actual output dimension — use the model's own method, not encode(),
+        # to avoid any CPU-inference bugs during the cold-start probe.
+        _reported_dim = self.model.get_sentence_embedding_dimension()
+        self.embed_dim: int = int(_reported_dim) if _reported_dim else 384
+        self._schema = _make_schema(self.embed_dim)
+        # Note: GTE (Alibaba-NLP/gte-multilingual-base) has a confirmed RoPE
+        # position-cache corruption bug on PyTorch 2.6+ CPU. If you hit
+        # IndexError during indexing, switch to a model without custom RoPE code:
+        #   BALANCED: intfloat/multilingual-e5-small (~270MB, 384-dim)
+        #   POWER-ALT: BAAI/bge-m3 (~570MB, 1024-dim, 100+ langs, no bug)
+        print(f"   ✅ Model ready. (dim={self.embed_dim}, max_seq={_max_seq})\n")
 
         self.reranker: CrossEncoder | None = None
         if RERANK_ENABLED and RERANK_MODEL_NAME:
@@ -880,25 +904,37 @@ class OmniscienceEngine:
         self._trim_log_file()
 
     def _ensure_table(self):
-        names = set(self.db.table_names())
+        names = set(self.db.list_tables())
         if TABLE_NAME not in names:
-            return self.db.create_table(TABLE_NAME, schema=SCHEMA)
+            return self.db.create_table(TABLE_NAME, schema=self._schema)
 
         table = self.db.open_table(TABLE_NAME)
         existing_fields = [field.name for field in table.schema]
-        expected_fields = [field.name for field in SCHEMA]
+        expected_fields = [field.name for field in self._schema]
 
-        if existing_fields == expected_fields:
+        # Also check vector dimension — switching models changes the dim.
+        stored_vec_field = table.schema.field("vector") if "vector" in table.schema.names else None
+        stored_dim = stored_vec_field.type.list_size if stored_vec_field is not None else None
+
+        schema_ok = (existing_fields == expected_fields) and (stored_dim == self.embed_dim)
+        if schema_ok:
             return table
 
-        print("⚠️  Existing table schema is outdated. Recreating table from markdown source...")
+        reason = "schema fields changed" if existing_fields != expected_fields else f"vector dim changed ({stored_dim} → {self.embed_dim})"
+        print(f"⚠️  Table schema outdated ({reason}). Recreating and reindexing from markdown source...")
         self.db.drop_table(TABLE_NAME)
-        return self.db.create_table(TABLE_NAME, schema=SCHEMA)
+        return self.db.create_table(TABLE_NAME, schema=self._schema)
 
     def embed(self, texts: list[str], prefix: str = "") -> list[list[float]]:
         if prefix:
             texts = [f"{prefix}{t}" for t in texts]
-        return self.model.encode(texts, show_progress_bar=False).tolist()
+        # batch_size=1 was a workaround for GTE's RoPE position-cache bug on CPU.
+        # GTE is no longer the active model — use the default batch size for speed.
+        # Note: If you switch back to GTE (Alibaba-NLP/gte-multilingual-base) and
+        # hit IndexError during indexing, add batch_size=1 back here.
+        return self.model.encode(
+            texts, show_progress_bar=False, normalize_embeddings=True
+        ).tolist()
 
     def index_file(
         self,
@@ -934,7 +970,7 @@ class OmniscienceEngine:
 
         vectors = self.embed(chunks, prefix=EMBED_DOCUMENT_PREFIX)
         tags = extract_tags(content)
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         namespace = infer_namespace(rel)
 
         source = "user_note"
@@ -994,7 +1030,7 @@ class OmniscienceEngine:
             if throttle_sec > 0:
                 time.sleep(throttle_sec)
 
-        self.indexed_at = datetime.utcnow()
+        self.indexed_at = datetime.now(timezone.utc)
         self._save_manifest()
         self._invalidate_query_cache()
         self._cleanup_runtime_files()
@@ -1386,7 +1422,7 @@ class OmniscienceEngine:
         return True
 
     def capture(self, req: CaptureRequest) -> dict[str, Any]:
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         # ── Store safety: rate limit ───────────────────────────────────────────
         if not self._check_store_rate(req.source):
@@ -1427,7 +1463,7 @@ class OmniscienceEngine:
                 base = slug(req.file_name)
                 file_name = f"{base}.md" if not base.endswith(".md") else base
             else:
-                date_stamp = datetime.utcnow().strftime("%Y-%m-%d")
+                date_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 file_name = f"capture-{date_stamp}.md"
             target = archive_dir / file_name
             entry = f"- [{now_iso}] #{tag} [namespace={namespace}] [source={source}] — {req.text}\n"
@@ -1485,7 +1521,7 @@ class OmniscienceEngine:
 
     def _update_dashboard(self, file_count: int, chunk_count: int):
         dash = self.vault / "DASHBOARD.md"
-        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         lines = [
             "# 🧠 Omniscience Engine — Dashboard",
             "",
@@ -1570,7 +1606,7 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
 
     def _log(agent: str, endpoint: str, detail: str = "") -> None:
         entry = {
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat() + "Z",
             "agent": agent,
             "endpoint": endpoint,
             "detail": detail,
@@ -1909,6 +1945,18 @@ def main():
         )
         EMBED_QUERY_PREFIX = os.getenv("OMNI_EMBED_QUERY_PREFIX", "").strip()
         EMBED_DOCUMENT_PREFIX = os.getenv("OMNI_EMBED_DOCUMENT_PREFIX", "").strip()
+        # Re-freeze BM25 and search constants missed in original fix
+        global BM25_ENABLED, BM25_CANDIDATES, DEFAULT_SEARCH_MODE
+        global RERANK_ENABLED, RERANK_MODEL_NAME, RERANK_CANDIDATES
+        global QUERY_CACHE_TTL_SEC, QUERY_CACHE_MAX_ITEMS
+        BM25_ENABLED = _env_flag("OMNI_BM25_ENABLED", True)
+        BM25_CANDIDATES = int(os.getenv("OMNI_BM25_CANDIDATES", "40"))
+        DEFAULT_SEARCH_MODE = os.getenv("OMNI_DEFAULT_SEARCH_MODE", "balanced").strip().lower() or "balanced"
+        RERANK_ENABLED = _env_flag("OMNI_RERANK_ENABLED", True)
+        RERANK_MODEL_NAME = os.getenv("OMNI_RERANK_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-12-v2").strip()
+        RERANK_CANDIDATES = int(os.getenv("OMNI_RERANK_CANDIDATES", "36"))
+        QUERY_CACHE_TTL_SEC = int(os.getenv("OMNI_QUERY_CACHE_TTL_SEC", "3600"))
+        QUERY_CACHE_MAX_ITEMS = int(os.getenv("OMNI_QUERY_CACHE_MAX_ITEMS", "256"))
 
     engine = OmniscienceEngine(args.vault)
 
