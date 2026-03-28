@@ -11,23 +11,21 @@
 # Default is multilingual (EN, ES, ZH, PT, JA, RU + 50 more languages).
 # Changing this requires a full reindex: python engine/omniscience.py reindex
 embedding:
-  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  # English-only (faster, smaller): BAAI/bge-small-en-v1.5
-  # Best multilingual (larger, slower): BAAI/bge-m3
-  # nomic-embed-text-v1.5: high quality but 6× slower on CPU, needs einops.
-  #   Requires task prefixes (set both if using nomic):
-  # query_prefix: "search_query: "
-  # document_prefix: "search_document: "
+  # ── Model Tiers — pick one ─────────────────────────────────────────────────
   #
-  # Performance guide (CPU-only):
-  #   paraphrase-multilingual-MiniLM-L12-v2: ~40ms/query, 384-dim, 50+ langs
-  #   BAAI/bge-small-en-v1.5:                ~35ms/query, 384-dim, EN only
-  #   nomic-embed-text-v1.5:                ~254ms/query, 768-dim, EN (needs einops)
-  #   BAAI/bge-m3:                          ~400ms/query, 1024-dim, 100+ langs
+  #  LIGHT    (~90MB,  384-dim, EN only)   BAAI/bge-small-en-v1.5
+  #  DEFAULT  (~130MB, 384-dim, 50+ langs) sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  #  BALANCED (~270MB, 384-dim, EN+ES+100) intfloat/multilingual-e5-small
+  #  POWER    (~1.2GB, 768-dim, EN+ES+70)  Alibaba-NLP/gte-multilingual-base  ← recommended upgrade
   #
-  # Quality vs corpus size: on small vaults (<50 docs), MiniLM is the right
-  # default. Larger models only outperform on 500+ doc corpora where they
-  # need to discriminate between many similar documents.
+  #  All models run 100% local/offline. Changing model requires reindex:
+  #    python engine/omniscience.py reindex
+  #
+  #  POWER tier benefits: 8192-token context (vs 512), better recall, elastic dims.
+  #  Requires trust_remote_code=True — handled automatically by the engine.
+  #
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  # DEFAULT — works on any machine
+  # model: Alibaba-NLP/gte-multilingual-base  # POWER tier — best quality, requires 8GB+ RAM + reindex
 
 # ── Search ─────────────────────────────────────────────────────────────────
 search:
@@ -71,6 +69,31 @@ memory:
   # Dedup threshold: skip storing content this similar to existing (0 = disabled)
   store_dedup_threshold: 0.92
 
+# ── Namespaces ─────────────────────────────────────────────────────────────
+# Controls which namespaces the grounding filter treats as high-quality evidence.
+# trusted   → included in default grounded searches (show in search results)
+# low_trust → deprioritized but not excluded (raw chats, inbox, etc.)
+namespaces:
+  trusted:
+    - company_core      # SOUL.md, USER.md, ACTIVE_CONTEXT.md, Core files
+    - company_memory    # stored memories
+    - knowledge         # Knowledge/ vault files
+    - projects          # project docs
+    - legal_ip          # legal/IP docs
+    - bots_runtime      # live bot state and logs
+    - skills            # skill library rows — large namespace, must be trusted
+    - migration         # migration history — useful context
+    - agent_cowork      # cowork agent memory
+    - agent_codex       # codex agent memory
+    - home_md           # home directory markdown
+    - templates         # vault templates
+  low_trust:
+    - raw_chats
+    - chat_imports
+    - inbox
+    - scratch
+    - dashboard_md
+
 # ── Privacy ────────────────────────────────────────────────────────────────
 privacy:
   # Namespaces excluded from all default searches.
@@ -88,6 +111,17 @@ reindex:
   # interactive queries. On <8 thread machines this prevents reindex from
   # starving search. 50ms × 20 files = 1s total overhead.
   throttle_ms: 50
+
+# ── MCP Network ────────────────────────────────────────────────────────────
+# Settings for the HTTP MCP endpoint used by remote agents and other machines.
+mcp:
+  port: 8766
+  # Bearer token to secure the MCP endpoint.
+  # Set this if your MCP port is accessible over the network (NAS, LAN, VPN).
+  # Leave empty for local-only open access.
+  # key: your_secret_token_here
+  #
+  # OMNI_MCP_KEY env var always takes priority over this setting.
 
 # ── Advanced ───────────────────────────────────────────────────────────────
 # advanced:

@@ -86,6 +86,8 @@ _YAML_TO_ENV: dict[str, str] = {
 # Keys whose YAML values are lists — joined to comma-separated strings.
 _LIST_KEYS: set[str] = {
     "privacy.private_namespaces",
+    "namespaces.trusted",
+    "namespaces.low_trust",
 }
 
 
@@ -140,8 +142,12 @@ def apply_yaml_config(vault_path: str | Path) -> None:
         os.environ[env_key] = _scalar(value)
 
     # Handle list keys (e.g. private_namespaces → comma-separated)
-    for dotpath in _LIST_KEYS:
-        env_key = "OMNI_PRIVATE_NAMESPACES"
+    _LIST_KEY_TO_ENV = {
+        "privacy.private_namespaces": "OMNI_PRIVATE_NAMESPACES",
+        "namespaces.trusted":         "OMNI_TRUSTED_NAMESPACES",
+        "namespaces.low_trust":       "OMNI_LOW_TRUST_NAMESPACES",
+    }
+    for dotpath, env_key in _LIST_KEY_TO_ENV.items():
         if env_key in os.environ:
             continue
         value = _get_nested(data, dotpath)

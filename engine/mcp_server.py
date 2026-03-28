@@ -330,6 +330,46 @@ TOOLS = [
         }
     },
     {
+        "name": "register_agent",
+        "description": (
+            "Register this agent in the Command Center network. "
+            "Creates a private vault namespace for the agent and saves its identity to the registry. "
+            "Call this once per agent on first connection. Subsequent calls update last_seen."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "description": "Unique agent identifier (e.g. 'reasoner', 'oracle')"},
+                "name": {"type": "string", "description": "Human-readable agent name"},
+                "host": {"type": "string", "description": "Machine this agent runs on (e.g. 'desktop', 'nas')", "default": ""},
+                "personality": {"type": "string", "description": "Optional SOUL.md content to save for this agent", "default": ""},
+            },
+            "required": ["agent_id", "name"],
+        },
+    },
+    {
+        "name": "list_agents",
+        "description": "List all agents registered in the Command Center network with their last_seen timestamp and host.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "pre_compaction_save",
+        "description": (
+            "Save agent context before the context window compacts. "
+            "Call this whenever you detect compaction is imminent or are about to end a long session. "
+            "Saves a LAST_SESSION.md snapshot to the agent's private namespace so bootstrap_agent can recover it."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent_id": {"type": "string", "description": "Agent identifier"},
+                "context_summary": {"type": "string", "description": "Summary of current context, decisions, and state"},
+                "next_actions": {"type": "string", "description": "What to do next session", "default": ""},
+            },
+            "required": ["agent_id", "context_summary"],
+        },
+    },
+    {
         "name": "bootstrap_agent",
         "description": (
             "Generate a Command Center startup packet for an AI agent. "
@@ -544,6 +584,34 @@ RESOURCE_FILE_MAP = {
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 SKILL_EXCLUDE_DIRS = {"assets", "scripts", "references", "eval-viewer", "__pycache__"}
+
+# ─── Agent Registry Helpers ────────────────────────────────────────────────────
+
+_REGISTRY_PATH = VAULT_PATH / "Agents" / "registry.yaml"
+
+
+def _read_registry() -> dict:
+    try:
+        import yaml
+        if _REGISTRY_PATH.exists():
+            data = yaml.safe_load(_REGISTRY_PATH.read_text(encoding="utf-8")) or {}
+            return data if isinstance(data, dict) else {"version": 1, "agents": {}}
+    except Exception:
+        pass
+    return {"version": 1, "agents": {}}
+
+
+def _write_registry(data: dict) -> None:
+    try:
+        import yaml
+        _REGISTRY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _REGISTRY_PATH.write_text(
+            "# Command Center Agent Registry — auto-managed, do not edit by hand\n"
+            + yaml.dump(data, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
 META_TOOL_TRIGGERS = {
     "search_memory",
     "store",
@@ -554,6 +622,9 @@ META_TOOL_TRIGGERS = {
     "read_skill",
     "resolve_skills",
     "bootstrap_agent",
+    "register_agent",
+    "list_agents",
+    "pre_compaction_save",
     "update_working_set",
     "record_handoff",
     "verify_vault_file",
@@ -1079,6 +1150,101 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             + "\n\n---\n\n".join(parts)
         )
 
+    elif name == "register_agent":
+        agent_id = arguments.get("agent_id", "").strip().lower().replace(" ", "_")
+        display_name = arguments.get("name", agent_id).strip()
+        host = arguments.get("host", "").strip()
+        personality = arguments.get("personality", "").strip()
+
+        if not agent_id:
+            return "Error: agent_id is required."
+
+        import datetime
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+
+        # Create private vault namespace
+        agent_dir = VAULT_PATH / "Agents" / agent_id
+        agent_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write personality if provided
+        if personality:
+            soul_path = agent_dir / "SOUL.md"
+            soul_path.write_text(personality, encoding="utf-8")
+
+        # Update registry
+        registry = _read_registry()
+        existing = registry.get("agents", {}).get(agent_id, {})
+        registry.setdefault("agents", {})[agent_id] = {
+            "name": display_name,
+            "host": host or existing.get("host", "unknown"),
+            "registered_at": existing.get("registered_at", now),
+            "last_seen": now,
+            "namespace": f"vault/Agents/{agent_id}/",
+        }
+        _write_registry(registry)
+
+        return (
+            f"Agent '{display_name}' registered (id={agent_id}).\n"
+            f"Private namespace: vault/Agents/{agent_id}/\n"
+            f"Last seen: {now}\n"
+            f"{'SOUL.md written.' if personality else 'No personality provided — add vault/Agents/' + agent_id + '/SOUL.md manually.'}\n\n"
+            f"Next: call bootstrap_agent(agent='{display_name}', agent_id='{agent_id}') to load your context."
+        )
+
+    elif name == "list_agents":
+        registry = _read_registry()
+        agents = registry.get("agents", {})
+        if not agents:
+            return "No agents registered yet. Call register_agent() to add one."
+        lines = ["# Registered Agents\n"]
+        for aid, info in agents.items():
+            lines.append(
+                f"## {info.get('name', aid)} (id={aid})\n"
+                f"- host: {info.get('host', 'unknown')}\n"
+                f"- namespace: {info.get('namespace', f'vault/Agents/{aid}/')}\n"
+                f"- registered: {info.get('registered_at', 'unknown')}\n"
+                f"- last_seen: {info.get('last_seen', 'unknown')}\n"
+            )
+        return "\n".join(lines)
+
+    elif name == "pre_compaction_save":
+        agent_id = arguments.get("agent_id", "").strip().lower().replace(" ", "_")
+        context_summary = arguments.get("context_summary", "").strip()
+        next_actions = arguments.get("next_actions", "").strip()
+
+        if not agent_id or not context_summary:
+            return "Error: agent_id and context_summary are required."
+
+        import datetime
+        now = datetime.datetime.utcnow().isoformat() + "Z"
+
+        agent_dir = VAULT_PATH / "Agents" / agent_id
+        agent_dir.mkdir(parents=True, exist_ok=True)
+
+        content = (
+            f"# Last Session Snapshot\n\n"
+            f"saved_at: {now}\n"
+            f"agent_id: {agent_id}\n\n"
+            f"## Context Summary\n\n{context_summary}\n\n"
+        )
+        if next_actions:
+            content += f"## Next Actions\n\n{next_actions}\n"
+
+        snapshot_path = agent_dir / "LAST_SESSION.md"
+        snapshot_path.write_text(content, encoding="utf-8")
+
+        # Update last_seen in registry
+        registry = _read_registry()
+        if agent_id in registry.get("agents", {}):
+            registry["agents"][agent_id]["last_seen"] = now
+            _write_registry(registry)
+
+        return (
+            f"Context saved to vault/Agents/{agent_id}/LAST_SESSION.md\n"
+            f"Timestamp: {now}\n"
+            f"This snapshot will be loaded automatically on next bootstrap_agent(agent_id='{agent_id}')."
+        )
+
     elif name == "bootstrap_agent":
         agent = arguments.get("agent", "").strip()
         task = arguments.get("task", "").strip()
@@ -1110,20 +1276,48 @@ async def handle_tool_call(name: str, arguments: dict) -> str:
             for item in stale_entries[:8]
         ) or "- No stale core files detected."
 
-        # If the agent has a private namespace, surface its memory files too.
+        # If the agent has a private namespace, load personality + surface memory files.
         agent_private_section = ""
         if agent_id:
+            import datetime
             safe_id = agent_id.lower().replace(" ", "_")
             agent_dir = VAULT_PATH / "Agents" / safe_id
-            if agent_dir.exists():
-                private_files = sorted(agent_dir.glob("*.md"))
-                if private_files:
-                    file_lines = "\n".join(f"- Agents/{safe_id}/{p.name}" for p in private_files[-5:])
-                    agent_private_section = (
-                        f"\n## Agent Private Context ({safe_id})\n"
-                        f"Include these in your load order after shared core files:\n"
-                        f"{file_lines}\n"
-                    )
+            agent_dir.mkdir(parents=True, exist_ok=True)
+
+            # Update last_seen in registry
+            registry = _read_registry()
+            if safe_id in registry.get("agents", {}):
+                registry["agents"][safe_id]["last_seen"] = datetime.datetime.utcnow().isoformat() + "Z"
+                _write_registry(registry)
+
+            # Load personality files inline
+            personality_sections = []
+            for fname in ["SOUL.md", "IDENTITY.md", "USER.md"]:
+                fpath = agent_dir / fname
+                if fpath.exists():
+                    content = fpath.read_text(encoding="utf-8").strip()
+                    if content:
+                        personality_sections.append(f"### {fname}\n{content}")
+
+            # Surface LAST_SESSION.md first, then other memory files
+            last_session = agent_dir / "LAST_SESSION.md"
+            other_files = sorted(
+                [p for p in agent_dir.glob("*.md")
+                 if p.name not in {"SOUL.md", "IDENTITY.md", "USER.md", "LAST_SESSION.md"}]
+            )
+            file_list = []
+            if last_session.exists():
+                file_list.append(f"- Agents/{safe_id}/LAST_SESSION.md  ← last session snapshot")
+            file_list += [f"- Agents/{safe_id}/{p.name}" for p in other_files[-4:]]
+
+            personality_block = "\n\n".join(personality_sections)
+            files_block = "\n".join(file_list) or "- No private files yet."
+
+            agent_private_section = (
+                f"\n## Agent Identity ({safe_id})\n"
+                + (f"{personality_block}\n" if personality_block else "- No personality files found. Add SOUL.md to vault/Agents/{safe_id}/\n")
+                + f"\n## Agent Private Files\n{files_block}\n"
+            )
 
         return (
             f"# Command Center Bootstrap\n\n"

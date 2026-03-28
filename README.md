@@ -254,9 +254,21 @@ All settings live in `vault/config.yaml` — a human-readable file that ships pr
 
 ```yaml
 embedding:
-  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  # Supports 50+ languages (EN, ES, ZH, PT, JA, RU...)
-  # English-only alternative: BAAI/bge-small-en-v1.5
+  # ── Pick the tier that fits your hardware ──────────────────────────────────
+  #  LIGHT    ~90MB   384-dim  EN only    BAAI/bge-small-en-v1.5
+  #             Raspberry Pi, low-RAM servers, fastest cold start
+  #
+  #  DEFAULT  ~130MB  384-dim  50+ langs  sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  #             Recommended for most users. Works on any modern laptop.
+  #
+  #  BALANCED ~270MB  384-dim  100+ langs intfloat/multilingual-e5-small
+  #             Better recall, still fine on 4GB RAM machines.
+  #
+  #  POWER    ~1.2GB  768-dim  70+ langs  Alibaba-NLP/gte-multilingual-base
+  #             Best quality. 8192-token context. Requires 8GB+ RAM.
+  #             After switching: python engine/omniscience.py reindex
+  #
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  # DEFAULT — change to your tier
 
 search:
   mode: balanced          # strict | balanced | exploratory

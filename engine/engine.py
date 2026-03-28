@@ -560,8 +560,8 @@ class OmniscienceEngine:
         print(f"   DB    : {self.db_path}")
         print(f"   Model : {MODEL_NAME}")
 
-        print("   Loading embedding model (first run downloads ~130MB)...")
-        self.model = SentenceTransformer(MODEL_NAME)
+        print("   Loading embedding model (first run downloads model weights)...")
+        self.model = SentenceTransformer(MODEL_NAME, trust_remote_code=True)
         print("   ✅ Model ready.\n")
 
         self.reranker: CrossEncoder | None = None
@@ -1208,6 +1208,7 @@ class OmniscienceEngine:
 
         rows = (
             self.table.search(vec)
+            .metric("cosine")
             .limit(fetch_k)
             .select(["id", "path", "chunk_index", "text", "tags", "namespace", "source", "indexed_at", "_distance"])
             .to_list()
@@ -1371,6 +1372,7 @@ class OmniscienceEngine:
             vec = self.embed([text])[0]
             hits = (
                 self.table.search(vec)
+                .metric("cosine")
                 .limit(3)
                 .select(["text", "_distance"])
                 .to_list()
@@ -1781,6 +1783,84 @@ def create_app(engine: OmniscienceEngine) -> FastAPI:
         engine._cleanup_runtime_files()
         return JSONResponse({"status": "ok", "action": "cleanup"})
 
+    @app.get("/vault/graph")
+    def vault_graph():
+        """Vault as graph data: nodes (files) + edges (wikilinks + namespace rings).
+        Used by the ECE Brain 3D visualization frontend."""
+        import re as _re
+
+        df = engine.table.to_pandas()
+
+        # Build unique node list (one per file path)
+        seen_paths: dict[str, dict] = {}
+        for _, row in df.iterrows():
+            path = str(row.get("path", ""))
+            if not path or path in seen_paths:
+                continue
+            ns = str(row.get("namespace", "unknown"))
+            text = str(row.get("text", ""))
+            title = path.split("/")[-1].replace(".md", "").replace("-", " ").replace("_", " ")
+            seen_paths[path] = {
+                "id": path, "title": title, "namespace": ns,
+                "preview": text[:200].strip(), "chunk_count": 0,
+            }
+        for _, row in df.iterrows():
+            path = str(row.get("path", ""))
+            if path in seen_paths:
+                seen_paths[path]["chunk_count"] += 1
+
+        nodes = list(seen_paths.values())
+
+        # Build edges from wikilinks
+        vault_path = engine.vault
+        wikilink_re = _re.compile(r"\[\[([^\]|#]+?)(?:\|[^\]]+)?\]\]")
+        path_index = {n["id"]: n for n in nodes}
+        edges: list[dict] = []
+        seen_edges: set[tuple] = set()
+
+        for node in nodes:
+            full_path = vault_path / node["id"]
+            if not full_path.exists():
+                continue
+            try:
+                content = full_path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            for match in wikilink_re.finditer(content):
+                target_name = match.group(1).strip().lower()
+                for pid, pnode in path_index.items():
+                    if pid == node["id"]:
+                        continue
+                    if target_name in pnode["title"].lower() or pnode["title"].lower() in target_name:
+                        key = tuple(sorted([node["id"], pid]))
+                        if key not in seen_edges:
+                            seen_edges.add(key)
+                            edges.append({"source": node["id"], "target": pid, "type": "wikilink"})
+                        break
+
+        # Add namespace ring edges (weak structural links)
+        ns_groups: dict[str, list[str]] = {}
+        for node in nodes:
+            ns_groups.setdefault(node["namespace"], []).append(node["id"])
+        for ns, members in ns_groups.items():
+            if len(members) < 2:
+                continue
+            for i in range(len(members)):
+                src, tgt = members[i], members[(i + 1) % len(members)]
+                key = tuple(sorted([src, tgt]))
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    edges.append({"source": src, "target": tgt, "type": "namespace"})
+
+        return JSONResponse({
+            "nodes": nodes, "links": edges,
+            "meta": {"node_count": len(nodes), "link_count": len(edges), "namespaces": list(ns_groups.keys())},
+        }, headers={"Access-Control-Allow-Origin": "*"})
+
+    # CORS for frontend access
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
     return app
 
 
@@ -1794,6 +1874,41 @@ def main():
     parser.add_argument("--port", type=int, default=API_PORT, help="API port (default: 8765)")
     parser.add_argument("--host", default=API_HOST, help="API host (default: 127.0.0.1)")
     args = parser.parse_args()
+
+    # ── Apply vault/config.yaml BEFORE engine init ─────────────────────────────
+    # YAML sets OMNI_* env vars. Module-level constants (TRUSTED_NAMESPACES etc.)
+    # are already frozen, so we re-initialize them here after applying config.
+    try:
+        from config import apply_yaml_config  # noqa: PLC0415
+    except ImportError:
+        try:
+            from engine.config import apply_yaml_config  # noqa: PLC0415
+        except ImportError:
+            apply_yaml_config = None  # type: ignore[assignment]
+    if apply_yaml_config is not None:
+        apply_yaml_config(args.vault)
+        # Re-freeze ALL module-level constants that read OMNI_* env vars,
+        # because those vars weren't set yet when the module was first imported.
+        global TRUSTED_NAMESPACES, LOW_TRUST_NAMESPACES, PRIVATE_NAMESPACES
+        global MODEL_NAME, EMBED_QUERY_PREFIX, EMBED_DOCUMENT_PREFIX
+        TRUSTED_NAMESPACES = _namespace_set_from_env(
+            "OMNI_TRUSTED_NAMESPACES",
+            "company_core,company_memory,knowledge,projects,legal_ip,bots_runtime",
+        )
+        LOW_TRUST_NAMESPACES = _namespace_set_from_env(
+            "OMNI_LOW_TRUST_NAMESPACES",
+            "raw_chats,chat_imports,inbox,scratch,system_runtime,dashboard_md",
+        )
+        PRIVATE_NAMESPACES = _namespace_set_from_env(
+            "OMNI_PRIVATE_NAMESPACES",
+            "local_only",
+        )
+        MODEL_NAME = os.getenv(
+            "OMNI_EMBEDDING_MODEL",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        )
+        EMBED_QUERY_PREFIX = os.getenv("OMNI_EMBED_QUERY_PREFIX", "").strip()
+        EMBED_DOCUMENT_PREFIX = os.getenv("OMNI_EMBED_DOCUMENT_PREFIX", "").strip()
 
     engine = OmniscienceEngine(args.vault)
 

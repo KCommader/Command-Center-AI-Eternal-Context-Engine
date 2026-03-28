@@ -14,6 +14,14 @@ vault/Core/CAPITAL_STATUS.md
 vault/Core/EXECUTION_HANDOFF.md
 vault/Archive/MEMORY.md
 
+# Agent private namespaces — personality, memory, and session snapshots are personal
+# vault/Agents/registry.yaml is committed (no personal data, just agent IDs)
+vault/Agents/*/SOUL.md
+vault/Agents/*/IDENTITY.md
+vault/Agents/*/USER.md
+vault/Agents/*/LAST_SESSION.md
+vault/Agents/*/memory-*.md
+
 # Migration output — analysis files are personal history, never commit
 # The migration/ tool ships with the repo; vault/Migration/ output does not
 vault/Migration/
@@ -71,3 +79,67 @@ Thumbs.db
 
 # Omniscience launcher runtime
 .omniscience/
+
+# Personal vault Core files not in the original list
+vault/Core/KAIJU_CAPITAL_STATUS.md
+vault/Core/OPENCLAW_POLY_GUARDIAN.md
+vault/Core/TRADING_EXECUTION_HANDOFF.md
+
+# Personal Knowledge files
+vault/Knowledge/ROBINHOOD_CREDIT_SPREAD_PLAYBOOK.md
+
+# Bot runtime state — rebuilt at runtime, never commit
+vault/bots_runtime/
+bot-status-state.json
+
+# Personal root-level files
+ROBINHOOD_CREDIT_SPREAD_PLAYBOOK.md
+ENV.txt
+temp_*.py
+*.canvas
+2026-*.md
+agents/
+
+# Cowork plugin installs — local to each machine
+vault/cowork-plugins/
+.openclaw/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Runtime monitoring scripts with personal paths
+scripts/monitor_report.sh
+
+# vault/Skills — only core ECE MCP tool skills ship with the repo.
+# Everything else is a personal plugin skill — blocked by default.
+vault/Skills/*.md
+!vault/Skills/bootstrap-agent.md
+!vault/Skills/freshness-report.md
+!vault/Skills/list-skills.md
+!vault/Skills/list-vault.md
+!vault/Skills/read-skill.md
+!vault/Skills/read-vault-file.md
+!vault/Skills/record-handoff.md
+!vault/Skills/resolve-skills.md
+!vault/Skills/search-memory.md
+!vault/Skills/store-memory.md
+!vault/Skills/sync-skills.md
+!vault/Skills/update-working-set.md
+!vault/Skills/verify-vault-file.md
+!vault/Skills/pre-compaction-save.md
+!vault/Skills/register-agent.md
+!vault/Skills/agent-development.md
+!vault/Skills/migrate-history.md
+!vault/Skills/skill-creator.md
+!vault/Skills/skill-development.md
+
+# Root-level skills directory — local plugin installs, machine-specific
+/skills/
+
+# Local Claude session worktrees
+.claude/worktrees/
+
+# Personal knowledge docs (machine-specific install references)
+vault/Knowledge/claude-skills-library.md

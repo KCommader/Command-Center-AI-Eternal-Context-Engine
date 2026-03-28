@@ -719,6 +719,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_backup.add_argument("--output", "-o", metavar="DIR", help="Output directory (default: .omniscience/backups/)")
     p_backup.set_defaults(func=cmd_backup)
 
+    p_import = sub.add_parser(
+        "import-history",
+        help="Import AI conversation exports (Claude, ChatGPT, Gemini) into the vault",
+    )
+    p_import.add_argument("source", type=Path, help="Path to export file or directory")
+    p_import.add_argument(
+        "--provider", "-p", required=True,
+        choices=["claude", "gpt", "gemini"],
+        help="Which AI provider: claude, gpt, or gemini",
+    )
+    p_import.add_argument("--vault", type=Path, default=DEFAULT_VAULT, help="Vault path")
+    p_import.add_argument("--dry-run", action="store_true", help="Show what would be imported without writing")
+    p_import.add_argument("--skip-index", action="store_true", help="Write files but skip LanceDB indexing")
+    p_import.add_argument("--limit", type=int, default=0, help="Only process first N conversations (0=all)")
+    p_import.add_argument("--quiet", "-q", action="store_true", help="Suppress progress output")
+    p_import.set_defaults(func=cmd_import_history)
+
     return parser
 
 
@@ -825,6 +842,21 @@ def cmd_setup_ai(args: argparse.Namespace) -> int:
 
     print()
     print("Done. Run `python engine/omniscience.py doctor` to verify.")
+    return 0
+
+
+def cmd_import_history(args: argparse.Namespace) -> int:
+    """Import AI conversation history exports into the vault."""
+    from engine.history_ingester import ingest
+    stats = ingest(
+        source=args.source,
+        provider=args.provider,
+        vault=args.vault,
+        dry_run=args.dry_run,
+        verbose=not args.quiet,
+        skip_index=args.skip_index,
+        limit=args.limit,
+    )
     return 0
 
 

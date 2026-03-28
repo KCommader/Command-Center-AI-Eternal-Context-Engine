@@ -101,6 +101,10 @@ _CUSTOM_AI_WORKSPACE = Path(
     os.environ.get("CC_CUSTOM_AI_WORKSPACE", Path.home() / ".custom-ai")
 ).expanduser()
 
+_OPENCLAW_SKILLS_ROOT = Path(
+    os.environ.get("CC_OPENCLAW_SKILLS_PATH", Path.home() / ".openclaw" / "workspace" / "skills")
+).expanduser()
+
 # Skills that are engine meta-tools, not intended for AI runtimes as prompts.
 # These live in vault/Skills/ but are MCP tool descriptions, not executable
 # prompts — they document what a tool does, not what the AI should do.
@@ -509,7 +513,7 @@ class CodexAdapter(SkillAdapter):
 
 # ── Custom AI adapter ──────────────────────────────────────────────────────────
 
-class Custom AIAdapter(SkillAdapter):
+class CustomAIAdapter(SkillAdapter):
     """
     Custom AI gateway adapter.
 
@@ -535,6 +539,35 @@ class Custom AIAdapter(SkillAdapter):
         return target, content
 
 
+# ── OpenClaw adapter ──────────────────────────────────────────────────────────
+
+class OpenClawAdapter(SkillAdapter):
+    """
+    OpenClaw runtime adapter.
+
+    OpenClaw loads user skills from the agent's workspace skills directory.
+    Default path: ~/.openclaw/workspace/skills/{slug}/SKILL.md
+
+    Each skill lives in its own subfolder — same as CustomAI but pointing to
+    the OpenClaw workspace instead. The SKILL.md file uses the same frontmatter
+    format (name + description) that OpenClaw's skill loader expects.
+
+    Override CC_OPENCLAW_SKILLS_PATH to use a different workspace path
+    (e.g. for a non-default OpenClaw agent workspace).
+    """
+
+    name = "openclaw"
+    label = "OpenClaw"
+    target_root = _OPENCLAW_SKILLS_ROOT
+
+    def format_skill(self, skill: Skill) -> tuple[Path, str]:
+        skill_dir = self.target_root / skill.slug
+        target = skill_dir / "SKILL.md"
+        frontmatter = f"---\nname: {skill.slug}\ndescription: {skill.description}\n---\n"
+        content = f"{_AUTOGEN_COMMENT}\n{frontmatter}\n{skill.body.strip()}\n"
+        return target, content
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 #: All registered adapters. Add new runtimes here.
@@ -544,7 +577,8 @@ ADAPTERS: dict[str, SkillAdapter] = {
         ClaudeAdapter(),
         GeminiAdapter(),
         CodexAdapter(),
-        Custom AIAdapter(),
+        CustomAIAdapter(),
+        OpenClawAdapter(),
     ]
 }
 
