@@ -904,7 +904,9 @@ class OmniscienceEngine:
         self._trim_log_file()
 
     def _ensure_table(self):
-        names = set(self.db.list_tables())
+        _tbl_result = self.db.list_tables()
+        # LanceDB >=0.12 returns ListTablesResponse(tables=[...]) instead of a plain list
+        names = set(_tbl_result.tables if hasattr(_tbl_result, "tables") else _tbl_result)
         if TABLE_NAME not in names:
             return self.db.create_table(TABLE_NAME, schema=self._schema)
 
