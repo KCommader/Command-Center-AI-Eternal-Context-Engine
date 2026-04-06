@@ -300,6 +300,26 @@ privacy:
 
 Environment variables (`OMNI_*`) always override `config.yaml`. The YAML file is the human layer; env vars are for automation, Docker, and CI.
 
+### Embedding Models — How They Work and Why We Chose These
+
+Embedding models are the neural networks that convert your vault files into numeric vectors — fixed-length arrays of floats that encode semantic meaning. When you run a search, your query gets embedded the same way, and the engine finds vault content whose vector is geometrically closest to it. The quality of those vectors directly determines whether "what did we decide about the database schema" surfaces the right notes or noisy irrelevant ones.
+
+All models run **100% locally** — your text never leaves your machine. No API keys, no cloud calls, no data exposure.
+
+**How to choose your tier:**
+
+The tiers are a quality/resource trade-off. All models in the same dimensional class use the same LanceDB schema — the engine detects dimension changes automatically at startup and rebuilds the index if needed, so switching is one config line and one reindex command (`python engine/omniscience.py reindex`).
+
+The **DEFAULT tier** (`paraphrase-multilingual-MiniLM-L12-v2`, ~130MB, 384-dim) runs on anything with 2GB RAM. It covers 50+ languages and is the safe starting point — fast cold starts, low memory pressure, good enough for most personal vaults.
+
+The **POWER tier** (`BAAI/bge-m3`, ~570MB, 1024-dim) is the recommended upgrade for anyone doing serious work. bge-m3 is a hybrid retrieval model that runs three retrieval methods simultaneously — dense vector search, sparse BM25-style keyword matching, and ColBERT late interaction — in a single inference pass. The 1024-dimensional vectors capture substantially more semantic nuance than 384-dim models, the context window extends to 8192 tokens (vs 512 for MiniLM), and it covers 100+ languages with strong multilingual recall. MTEB Multilingual nDCG@10 score: **0.674**. For a vault that accumulates months of decisions, architecture notes, and code context, the improvement in recall precision is meaningful.
+
+The **POWER+ tier** (`Qwen/Qwen3-Embedding-0.6B`, ~2.4GB, 1024-dim) is the cutting edge for local-only setups with 8GB+ RAM. Released April 2026, the Qwen3 Embedding series introduces instruction-aware embeddings — you can prepend a task description to tell the model whether it's indexing a code snippet, a meeting note, or a decision log, and it adjusts the embedding accordingly. It also supports Matryoshka Representation Learning (MRL), meaning you can truncate vectors to any smaller dimension at query time for faster approximate searches without reindexing. The 32K token context window handles documents that would chunk poorly at 8192 tokens. Benchmark-wise the 0.6B variant is competitive with bge-m3 at the same dimensionality; the 4B and 8B variants rank first on MTEB Multilingual (70.58).
+
+**Why Alibaba GTE was removed:**
+
+`Alibaba-NLP/gte-multilingual-base` was the original POWER tier recommendation. It was removed after a confirmed upstream bug: on PyTorch 2.10+ CPU, the model's RoPE (Rotary Position Embedding) implementation corrupts the `position_ids` tensor during inference. The bug produces **silently wrong embeddings** — the model runs without errors, vectors look reasonable in shape, but positional information is scrambled, degrading retrieval quality in ways that are hard to diagnose. `bge-m3` is the drop-in replacement: same dimensionality, better benchmark scores, no known bugs. The GTE bug is documented in the engine source (`engine/engine.py`) for future reference.
+
 ---
 
 ## Privacy & Safety
