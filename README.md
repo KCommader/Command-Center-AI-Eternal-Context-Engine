@@ -255,18 +255,26 @@ All settings live in `vault/config.yaml` — a human-readable file that ships pr
 ```yaml
 embedding:
   # ── Pick the tier that fits your hardware ──────────────────────────────────
-  #  LIGHT    ~90MB   384-dim  EN only    BAAI/bge-small-en-v1.5
-  #             Raspberry Pi, low-RAM servers, fastest cold start
+  #  LIGHT     ~90MB   384-dim  EN only    BAAI/bge-small-en-v1.5
+  #              Raspberry Pi, low-RAM servers, fastest cold start
   #
-  #  DEFAULT  ~130MB  384-dim  50+ langs  sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  #             Recommended for most users. Works on any modern laptop.
+  #  DEFAULT   ~130MB  384-dim  50+ langs  sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  #              Recommended starting point. Works on any modern laptop.
   #
-  #  BALANCED ~270MB  384-dim  100+ langs intfloat/multilingual-e5-small
-  #             Better recall, still fine on 4GB RAM machines.
+  #  BALANCED  ~270MB  384-dim  100+ langs intfloat/multilingual-e5-small
+  #              Better recall, still fine on 4GB RAM machines.
   #
-  #  POWER    ~1.2GB  768-dim  70+ langs  Alibaba-NLP/gte-multilingual-base
-  #             Best quality. 8192-token context. Requires 8GB+ RAM.
-  #             After switching: python engine/omniscience.py reindex
+  #  POWER     ~570MB  1024-dim 100+ langs BAAI/bge-m3  ← recommended upgrade
+  #              Best quality/size ratio. 8192-token context. BM25+dense+colbert.
+  #              Requires ~6GB RAM. After switching: python engine/omniscience.py reindex
+  #
+  #  POWER+    ~2.4GB  1024-dim 100+ langs Qwen/Qwen3-Embedding-0.6B
+  #              Next-gen: MTEB multilingual competitive with bge-m3 at similar size.
+  #              Instruction-aware, 32K context, MRL (flexible dims). Requires 8GB+ RAM.
+  #
+  #  NOTE: Alibaba-NLP/gte-multilingual-base (old POWER tier) has a confirmed
+  #  RoPE position_ids memory corruption bug on PyTorch 2.10+ CPU — do not use.
+  #  bge-m3 is the drop-in replacement with better benchmark scores.
   #
   model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2  # DEFAULT — change to your tier
 
@@ -408,7 +416,7 @@ All other commands work identically. Docker is the recommended path on Windows f
 - **Role-based auth** — separate Bearer tokens for read/write/admin. Give each agent only the access it needs.
 - **Two MCP transports** — stdio spawns the server locally (zero config, works instantly). Streamable HTTP runs the server on a NAS and serves any machine on your LAN from one vault.
 
-- **Embedding model**: `paraphrase-multilingual-MiniLM-L12-v2` — 100% local, multilingual (EN, ES, ZH, PT, JA, RU + 50 more), configurable via `config.yaml`
+- **Embedding model**: configurable via `config.yaml` — ships with `paraphrase-multilingual-MiniLM-L12-v2` as the safe default; upgrade to `BAAI/bge-m3` (POWER tier, 1024-dim, 100+ langs, recommended) or `Qwen/Qwen3-Embedding-0.6B` (POWER+ tier, instruction-aware, 32K context, MRL); all models run 100% local. Changing model requires `python engine/omniscience.py reindex`.
 - **Vector DB**: LanceDB — embedded, disk-based, no server needed
 - **API**: FastAPI on `localhost:8765`
 - **MCP transports**: stdio (local, zero-config) + Streamable HTTP (NAS/network, Bearer auth)
