@@ -641,6 +641,23 @@ The repo ships a complete `.obsidian/` config inside `vault/` with everything pr
 
 ---
 
+## Topics & Tags
+
+**GitHub Topics** — helps discoverability and search indexing:
+
+`python` • `mcp` • `obsidian` • `claude` • `lancedb` • `local-ai` • `context-window` • `ai-memory` • `rag` • `retrieval-augmented-generation` • `local-llm` • `ai-agents` • `eternal-context` • `multi-agent` • `obsidian-plugin` • `semantic-search` • `vector-database` • `knowledge-management`
+
+**What this project is:**
+
+A local-first, AI-agnostic persistent memory layer. Solves the context window problem for long-running AI conversations by storing decisions, architecture, code context, and past work in a searchable vector database. Works with Claude, ChatGPT, Gemini, local LLMs, or any MCP-compatible AI. Use it as:
+
+- **RAG backend** for any AI — semantic search over your vault
+- **Multi-agent coordination** — shared memory for multiple AIs working on the same project
+- **Self-healing AI context** — your vault auto-updates with latest decisions; AI never loses track
+- **AI-agnostic memory layer** — swap out Claude for Grok, Gemini, local LLaMA without changing anything
+
+---
+
 ## License
 
 **Dual License — AGPL v3 / Commercial**
