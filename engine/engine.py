@@ -93,7 +93,7 @@ CHUNK_MAX_CHARS = int(os.getenv("OMNI_CHUNK_MAX_CHARS", "1500"))
 CHUNK_MIN_CHARS = int(os.getenv("OMNI_CHUNK_MIN_CHARS", "80"))
 API_PORT = 8765
 API_HOST = "127.0.0.1"
-IGNORED_DIRS = {".lancedb", ".obsidian", ".git", "__pycache__", "venv", ".venv", "node_modules"}
+IGNORED_DIRS = {".lancedb", ".obsidian", ".git", "__pycache__", "venv", ".venv", ".venv-linux", "node_modules", "dist-info", "site-packages", "Command-Center-AI", "Back First Command iteration antigravity windows"}
 RUNTIME_DIR_NAME = ".omniscience"
 INDEX_MANIFEST_FILE = "index_manifest.json"
 QUERY_CACHE_TTL_SEC = int(os.getenv("OMNI_QUERY_CACHE_TTL_SEC", "3600"))
@@ -461,7 +461,7 @@ def chunk_id(rel_path: str, idx: int) -> str:
 
 def vault_md_files(vault: Path) -> list[Path]:
     result = []
-    for root, dirs, files in os.walk(vault):
+    for root, dirs, files in os.walk(vault, followlinks=True):
         dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
         for file_name in files:
             if file_name.endswith(".md"):
